@@ -126,6 +126,7 @@
   function usar(bundle) {
     S.agenda = bundle.agenda; S.disc = (bundle.disciplinas && bundle.disciplinas.disciplinas) || [];
     S.notes = bundle.anotacoes || {};
+    S.mat = bundle.materiais || null;
     document.body.classList.remove('locked');
     var fu = document.getElementById('foot-upd');
     if (fu) fu.innerHTML = 'Agenda atualizada em ' + dmy(S.agenda.atualizadoEm) + '. <button class="linkbtn" data-act="sair">Sair deste aparelho</button>';
@@ -260,7 +261,7 @@
         (d.professor ? '<div class="meta">' + esc(d.professor) + '</div>' : '') +
         '<div class="meta">' + list.length + ' atividades · ' + pts + ' pts mapeados</div>' +
         '<div class="next">' + (nx ? '<b>' + dm(nx.data) + '</b> · ' + esc(nx.titulo) : 'Sem próxima data definida') + '</div>' +
-        '<div class="acts"><a class="btn primary" href="#/anotacoes/' + s.toLowerCase() + '">Ver anotações</a><a class="btn" href="#/anotacoes/' + s.toLowerCase() + '/datas">Datas</a></div></div>';
+        '<div class="acts"><a class="btn primary" href="#/anotacoes/' + s.toLowerCase() + '">Anotações</a><a class="btn" href="#/anotacoes/' + s.toLowerCase() + '/materiais">Materiais</a><a class="btn" href="#/anotacoes/' + s.toLowerCase() + '/datas">Datas</a></div></div>';
     });
     return h + '</div></div>';
   }
@@ -298,13 +299,15 @@
     var notas = (N.anotacoes || []).slice().sort(function (a, b) { return a.ordem - b.ordem; });
     var qs = (N.questoes || []).slice().sort(function (a, b) { return a.ordem - b.ordem; });
     var pz = evs().filter(function (e) { return e.disc === sig; }).sort(byDate);
-    var tab = sub === 'revisao' || sub === 'datas' ? sub : 'notas';
+    var tab = sub === 'revisao' || sub === 'datas' || sub === 'materiais' ? sub : 'notas';
+    var M = S.mat && S.mat.disciplinas && S.mat.disciplinas[sig];
+    var nMat = M ? M.modulos.reduce(function (a, m) { return a + m.itens.filter(function (i) { return i.tipo !== 'H'; }).length; }, 0) : 0;
     var done = LSget('done', {}), nd = notas.filter(function (n) { return done[n.id]; }).length;
     var h = '<div class="page" style="--c:' + cvar(sig) + '"><div class="head dhead"><span class="eyebrow">' + esc(sig) + (d.professor ? ' · ' + esc(d.professor) : '') + '</span><h1>' + esc(d.nome || 'Nome a confirmar') + '</h1>' +
       (d.descricao ? '<p class="lead">' + esc(d.descricao) + '</p>' : '') +
       (notas.length ? '<div class="prog"><span class="track"><i style="width:' + Math.round(nd / notas.length * 100) + '%"></i></span>' + nd + ' de ' + notas.length + ' revisadas</div>' : '') + '</div>';
     var base = '#/anotacoes/' + sig.toLowerCase();
-    h += '<div class="tabs" role="tablist">' + [['notas', 'Anotações', notas.length, base], ['revisao', 'Revisão', qs.length, base + '/revisao'], ['datas', 'Datas', pz.length, base + '/datas']].map(function (t) {
+    h += '<div class="tabs" role="tablist">' + [['notas', 'Anotações', notas.length, base], ['revisao', 'Revisão', qs.length, base + '/revisao'], ['materiais', 'Materiais', nMat, base + '/materiais'], ['datas', 'Datas', pz.length, base + '/datas']].map(function (t) {
       return '<button role="tab" aria-selected="' + (tab === t[0]) + '" data-go="' + t[3] + '">' + t[1] + '<span class="n">' + t[2] + '</span></button>';
     }).join('') + '</div>';
     if (tab === 'notas') {
@@ -319,9 +322,30 @@
         h += '</section>';
       });
     } else if (tab === 'revisao') h += flashHTML(sig, qs);
+    else if (tab === 'materiais') h += matHTML(M);
     else h += rows(pz, { noSig: true }) + '<p class="muted">As mesmas datas da agenda.</p>';
     if (N.atualizadoEm) h += '<p class="muted" style="font-size:13px">Anotações atualizadas em ' + dmy(N.atualizadoEm.slice(0, 10)) + (N.fonte ? ' · fonte: ' + esc(N.fonte) : '') + '</p>';
     return h + '</div>';
+  }
+  var TIPO = { F: 'Arquivo', P: 'Página', L: 'Link', Q: 'Questionário', A: 'Tarefa', D: 'Fórum' };
+  function ext(t) { var m = String(t).match(/\.([a-z0-9]{2,4})$/i); return m ? m[1].toUpperCase() : ''; }
+  function matHTML(M) {
+    if (!M || !M.modulos.length) return '<div class="card empty">Nenhum material encontrado no Canvas desta disciplina.</div>';
+    var base = (S.mat && S.mat.base) || 'https://pucminas.instructure.com';
+    var h = '<div class="bar" style="justify-content:space-between"><p class="muted" style="margin:0;font-size:14px">Os links abrem no Canvas da PUC, com o seu login. Lista atualizada em ' + dmy(S.mat.atualizadoEm) + '.</p>' +
+      '<a class="btn" target="_blank" rel="noopener" href="' + esc(base + '/courses/' + M.curso) + '">Abrir disciplina no Canvas ↗</a></div>';
+    M.modulos.forEach(function (m) {
+      if (!m.itens.length) return;
+      h += '<section class="unit"><h3>' + esc(m.nome) + '</h3><div class="card mats">';
+      m.itens.forEach(function (it) {
+        if (it.tipo === 'H') { h += '<div class="mat-h">' + esc(it.titulo) + '</div>'; return; }
+        var e = it.tipo === 'F' ? ext(it.titulo) : '';
+        var title = e ? it.titulo.replace(/\.[a-z0-9]{2,4}$/i, '') : it.titulo;
+        h += '<a class="mat" target="_blank" rel="noopener" href="' + esc(base + it.url) + '"><span class="mat-t mat-' + it.tipo + '">' + esc(e || TIPO[it.tipo] || 'Item') + '</span><span class="mat-n">' + esc(title) + '</span><span class="mat-go" aria-hidden="true">↗</span></a>';
+      });
+      h += '</div></section>';
+    });
+    return h;
   }
   function fcState(sig, qs) {
     var temas = []; qs.forEach(function (q) { if (temas.indexOf(q.tema || 'Geral') < 0) temas.push(q.tema || 'Geral'); });

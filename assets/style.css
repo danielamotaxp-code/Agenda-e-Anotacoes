@@ -110,6 +110,7 @@ section{display:flex;flex-direction:column;gap:12px}
 /* disciplinas */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
 .dcard{display:flex;flex-direction:column;gap:10px;padding:16px;border-top:4px solid var(--c)}
+.dcard .sig{align-self:flex-start}
 .dcard .nm{font-family:var(--f-head);font-size:21px;line-height:1.15;color:var(--navy)}
 .dcard .meta{font-size:13.5px;color:var(--muted)}
 .dcard .next{font-size:13.5px;border-top:1px dashed var(--line);padding-top:9px}
@@ -164,6 +165,18 @@ details[open]>summary .chev{transform:rotate(90deg)}
 .form .chk{flex-direction:row;align-items:center;gap:8px}
 .form .input,.form .select{flex:none;width:100%}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:50}
+/* materiais do Canvas */
+.mats{display:flex;flex-direction:column}
+.mat{display:grid;grid-template-columns:88px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);text-decoration:none;color:var(--ink)}
+.mat:first-child,.mat-h+.mat{border-top:0}
+.mat:hover{background:var(--gold-soft)}
+.mat-t{font:600 11px var(--f-mono);letter-spacing:.04em;text-transform:uppercase;padding:3px 7px;border-radius:6px;background:var(--tbd-bg);color:var(--tbd);text-align:center}
+.mat-F{background:#E7EEF7;color:#2F5F8A}.mat-L{background:var(--warn-bg);color:var(--warn)}.mat-Q,.mat-A{background:var(--hot-bg);color:var(--hot)}.mat-P{background:var(--ok-bg);color:var(--ok)}
+.mat-n{min-width:0;overflow-wrap:anywhere;font-size:15px}
+.mat-go{color:var(--muted)}
+.mat-h{padding:10px 14px 4px;font:600 12px var(--f-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--gold);border-top:1px solid var(--line)}
+.mat-h:first-child{border-top:0}
+@media (max-width:640px){.mat{grid-template-columns:auto minmax(0,1fr)}.mat-go{display:none}}
 /* acesso da turma */
 body.locked .nav{display:none}
 .login{min-height:70vh;align-items:center;justify-content:center}
