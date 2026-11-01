@@ -1,7 +1,7 @@
 /* Agenda Jurídica — site estático. Dados em data/*.json, atualizados pelo Claude via GitHub. */
 (function () {
   'use strict';
-  var ORDER = ['CUL', 'TEO', 'HIST', 'CID', 'DHF', 'LAB', 'FIL', 'SOC'];
+  var ORDER = ['CUL', 'TEO', 'HIST', 'CID', 'DHF', 'LAB', 'FIL', 'SOC', 'LIB'];
   var STATUS = { 'confirmada': 'Confirmada', 'prevista': 'Prevista', 'a-confirmar': 'A confirmar', 'a-definir': 'A definir' };
   var SECOES = [
     ['provas', 'Provas'], ['atividades', 'Atividades Avaliativas'], ['trabalhos', 'Trabalhos'],
@@ -135,7 +135,7 @@
   function loginView(msg) {
     document.body.classList.add('locked');
     app.innerHTML = '<div class="page login"><form class="card loginbox" id="login" autocomplete="on">' +
-      '<span class="eyebrow">Acesso da turma</span><h1>Agenda Jurídica</h1><p class="lead">Conteúdo exclusivo da turma de Direito. Entre com o acesso divulgado no grupo.</p>' +
+      '<span class="eyebrow">Acesso da turma</span><h1>Direito</h1><p class="lead">Agenda, anotações e materiais exclusivos da turma. Entre com o acesso divulgado no grupo.</p>' +
       (msg ? '<p class="err" role="alert">' + esc(msg) + '</p>' : '') +
       '<label>Usuário<input class="input" id="lg-user" name="username" autocomplete="username" required value="Direito"></label>' +
       '<label>Senha<input class="input" id="lg-pass" name="password" type="password" autocomplete="current-password" required></label>' +
@@ -176,12 +176,50 @@
     var provas = future.filter(function (e) { return e.secao === 'provas'; });
     var globais = E.filter(function (e) { return e.secao === 'globais'; });
     var tbd = E.filter(function (e) { return !e.data; });
-    var h = '<div class="page"><div class="head"><span class="eyebrow">Visão geral</span><h1>Agenda da turma</h1><hr class="rule"><p class="lead">Hoje é ' + WD[t.getDay()] + ', ' + dmy(iso(t)) + '. Prazos, provas e anotações de cada disciplina num só lugar.</p></div>';
+    var h = '<div class="page"><div class="head"><span class="eyebrow">Agenda · Visão geral</span><h1>Agenda da turma</h1><hr class="rule"><p class="lead">Hoje é ' + WD[t.getDay()] + ', ' + dmy(iso(t)) + '. Prazos, provas e avaliações de todas as disciplinas.</p></div>';
     h += '<div class="stats">' + [[provas.length, 'provas datadas a fazer'], [globais.length, 'avaliações globais'], [week.length, 'itens nos próximos 7 dias'], [tbd.length, 'itens a definir']].map(function (s) { return '<div class="card stat"><b>' + s[0] + '</b><span>' + s[1] + '</span></div>'; }).join('') + '</div>';
     h += '<section><h2>Próximos 7 dias</h2>' + rows(week) + '</section>';
-    h += '<section><div class="bar" style="justify-content:space-between"><h2>Próximos prazos</h2><button class="btn" data-act="ics"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg>Exportar calendário (.ics)</button></div>' + rows(future.slice(0, 12)) + '</section>';
-    h += '<section><h2>Caderno de estudos</h2><div class="grid">' + ORDER.map(discCardNotes).join('') + '</div></section></div>';
+    h += '<section><div class="bar" style="justify-content:space-between"><h2>Próximos prazos</h2><button class="btn" data-act="ics"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg>Exportar calendário (.ics)</button></div>' + rows(future.slice(0, 12)) + '</section></div>';
     return h;
+  }
+
+  /* ---------- início: os três espaços ---------- */
+  function countMat(sig) {
+    var M = S.mat && S.mat.disciplinas && S.mat.disciplinas[sig];
+    return M ? M.modulos.reduce(function (a, m) { return a + m.itens.filter(function (i) { return i.tipo !== 'H'; }).length; }, 0) : 0;
+  }
+  function vInicio() {
+    var t = today(), next = evs().filter(function (e) { return e.data && !isPast(e); }).sort(byDate).slice(0, 3);
+    var nNotas = 0, nPerg = 0, nMat = 0;
+    ORDER.forEach(function (s) { var d = discInfo(s); nNotas += d.notas || 0; nPerg += d.perguntas || 0; nMat += countMat(s); });
+    var h = '<div class="page"><div class="head"><span class="eyebrow">Turma de Direito · PUC Minas · 2026/2</span><h1>Direito</h1><hr class="rule"><p class="lead">Hoje é ' + WD[t.getDay()] + ', ' + dmy(iso(t)) + '. Escolha um dos três espaços.</p></div><div class="spaces">';
+    h += '<a class="card space sp-agenda" href="#/agenda"><span class="eyebrow">Espaço 1</span><h2>Agenda</h2><p>Calendário, provas, trabalhos, avaliações globais e avisos para o WhatsApp.</p><ul>' +
+      (next.length ? next.map(function (e) { return '<li><b>' + dm(e.data) + '</b> ' + esc(e.disc) + ' · ' + esc(e.titulo) + '</li>'; }).join('') : '<li>Nenhum prazo próximo.</li>') + '</ul><span class="go">Abrir a agenda →</span></a>';
+    h += '<a class="card space sp-notes" href="#/anotacoes"><span class="eyebrow">Espaço 2</span><h2>Anotações</h2><p>Resumos das aulas por disciplina e perguntas de revisão para as provas.</p><ul><li><b>' + nNotas + '</b> anotações</li><li><b>' + nPerg + '</b> perguntas de revisão</li></ul><span class="go">Abrir o caderno →</span></a>';
+    h += '<a class="card space sp-mat" href="#/materiais"><span class="eyebrow">Espaço 3</span><h2>Materiais do Canvas</h2><p>Textos, slides, videoaulas e tarefas de cada disciplina, com link direto para o Canvas.</p><ul><li><b>' + nMat + '</b> itens em ' + ORDER.length + ' disciplinas</li>' + (S.mat ? '<li>Atualizado em ' + dmy(S.mat.atualizadoEm) + '</li>' : '') + '</ul><span class="go">Abrir os materiais →</span></a>';
+    return h + '</div></div>';
+  }
+  function agendaNav(sub) {
+    return '<nav class="subnav" aria-label="Agenda">' + [['', 'Visão geral'], ['calendario', 'Calendário'], ['atividades', 'Atividades'], ['disciplinas', 'Por disciplina'], ['avisos', 'Avisos']].map(function (x) {
+      return '<a href="#/agenda' + (x[0] ? '/' + x[0] : '') + '"' + ((sub || '') === x[0] ? ' aria-current="page"' : '') + '>' + x[1] + '</a>';
+    }).join('') + '</nav>';
+  }
+
+  /* ---------- materiais do Canvas ---------- */
+  function vMatHome() {
+    var h = '<div class="page"><div class="head"><span class="eyebrow">Materiais do Canvas</span><h1>Materiais por disciplina</h1><hr class="rule"><p class="lead">Tudo o que os professores publicaram no Canvas, organizado pelos módulos de cada disciplina. Os links abrem no Canvas com o seu login da PUC.</p></div><div class="grid">';
+    ORDER.forEach(function (s) {
+      var d = discInfo(s), M = S.mat && S.mat.disciplinas && S.mat.disciplinas[s], n = countMat(s);
+      h += '<a class="card dcard" style="--c:' + cvar(s) + ';text-decoration:none;color:inherit" href="#/materiais/' + s.toLowerCase() + '">' + sigChip(s) + '<div class="nm">' + esc(d.nome || s) + '</div>' +
+        (d.professor ? '<div class="meta">' + esc(d.professor) + '</div>' : '') +
+        '<div class="next">' + (n ? '<b>' + n + '</b> itens em ' + M.modulos.filter(function (m) { return m.itens.length; }).length + ' módulos' : 'Nenhum material publicado') + '</div></a>';
+    });
+    return h + '</div>' + (S.mat ? '<p class="muted" style="font-size:13px">Lista copiada do Canvas em ' + dmy(S.mat.atualizadoEm) + '. Itens novos aparecem aqui quando a lista é atualizada.</p>' : '') + '</div>';
+  }
+  function vMatDisc(sig) {
+    var d = discInfo(sig), M = S.mat && S.mat.disciplinas && S.mat.disciplinas[sig];
+    return '<div class="page" style="--c:' + cvar(sig) + '"><div class="head dhead"><span class="eyebrow"><a href="#/materiais">Materiais do Canvas</a> · ' + esc(sig) + (d.professor ? ' · ' + esc(d.professor) : '') + '</span><h1>' + esc(d.nome || sig) + '</h1></div>' + matHTML(M) +
+      '<p class="muted" style="font-size:14px">Mesma disciplina em outros espaços: <a href="#/anotacoes/' + sig.toLowerCase() + '">Anotações</a> · <a href="#/agenda/disciplinas#' + sig + '">Datas na agenda</a></p></div>';
   }
 
   /* ---------- calendário ---------- */
@@ -253,17 +291,16 @@
   /* ---------- disciplinas ---------- */
   function nextOf(sig) { return evs().filter(function (e) { return e.disc === sig && e.data && !isPast(e); }).sort(byDate)[0]; }
   function vDisc() {
-    var h = '<div class="page"><div class="head"><span class="eyebrow">Disciplinas</span><h1>Disciplinas do semestre</h1></div><div class="grid">';
+    var h = '<div class="page"><div class="head"><span class="eyebrow">Agenda · Por disciplina</span><h1>Datas por disciplina</h1></div><div class="bar chips">' +
+      ORDER.map(function (s) { return '<a class="chip" href="#/agenda/disciplinas#' + s + '" data-jump="' + s + '">' + s + '</a>'; }).join('') + '</div>';
     ORDER.forEach(function (s) {
-      var d = discInfo(s), list = evs().filter(function (e) { return e.disc === s; }), nx = nextOf(s);
+      var d = discInfo(s), list = evs().filter(function (e) { return e.disc === s; }).sort(byDate);
       var pts = list.reduce(function (a, e) { var n = parseFloat(e.pontos); return a + (isNaN(n) || e.vinculo ? 0 : n); }, 0);
-      h += '<div class="card dcard" style="--c:' + cvar(s) + '">' + sigChip(s) + '<div class="nm">' + esc(d.nome || 'Nome a confirmar') + '</div>' +
-        (d.professor ? '<div class="meta">' + esc(d.professor) + '</div>' : '') +
-        '<div class="meta">' + list.length + ' atividades · ' + pts + ' pts mapeados</div>' +
-        '<div class="next">' + (nx ? '<b>' + dm(nx.data) + '</b> · ' + esc(nx.titulo) : 'Sem próxima data definida') + '</div>' +
-        '<div class="acts"><a class="btn primary" href="#/anotacoes/' + s.toLowerCase() + '">Anotações</a><a class="btn" href="#/anotacoes/' + s.toLowerCase() + '/materiais">Materiais</a><a class="btn" href="#/anotacoes/' + s.toLowerCase() + '/datas">Datas</a></div></div>';
+      h += '<section id="d-' + s + '" style="--c:' + cvar(s) + '"><div class="dhead"><span class="eyebrow">' + esc(s) + (d.professor ? ' · ' + esc(d.professor) : '') + '</span><h2>' + esc(d.nome || s) + '</h2>' +
+        '<p class="muted" style="margin:4px 0 0;font-size:14px">' + (list.length ? list.length + ' atividades · ' + pts + ' pts mapeados' : 'Nenhuma data cadastrada na agenda') + '</p></div>' +
+        (list.length ? rows(list, { noSig: true }) : '') + '</section>';
     });
-    return h + '</div></div>';
+    return h + '</div>';
   }
 
   /* ---------- anotações ---------- */
@@ -274,7 +311,7 @@
       '<div class="next">' + (nx ? 'Próxima: <b>' + dm(nx.data) + '</b> · ' + esc(nx.titulo) : 'Sem próxima data definida') + '</div></a>';
   }
   function vNotesHome() {
-    var h = '<div class="page"><div class="head"><span class="eyebrow">Caderno de estudos</span><h1>Anotações por disciplina</h1><hr class="rule"><p class="lead">Resumos organizados a partir das aulas, com perguntas de revisão e as datas de cada matéria.</p></div>';
+    var h = '<div class="page"><div class="head"><span class="eyebrow">Anotações</span><h1>Caderno de estudos</h1><hr class="rule"><p class="lead">Resumos organizados a partir das aulas, com perguntas de revisão para as provas.</p></div>';
     h += '<div class="bar"><input class="input" id="nq" type="search" placeholder="Buscar em todas as anotações (ex.: pretor, glosadores)" value="' + esc(S.q) + '"></div><div id="nres"></div>';
     return h + '<div class="grid">' + ORDER.map(discCardNotes).join('') + '</div></div>';
   }
@@ -299,15 +336,13 @@
     var notas = (N.anotacoes || []).slice().sort(function (a, b) { return a.ordem - b.ordem; });
     var qs = (N.questoes || []).slice().sort(function (a, b) { return a.ordem - b.ordem; });
     var pz = evs().filter(function (e) { return e.disc === sig; }).sort(byDate);
-    var tab = sub === 'revisao' || sub === 'datas' || sub === 'materiais' ? sub : 'notas';
-    var M = S.mat && S.mat.disciplinas && S.mat.disciplinas[sig];
-    var nMat = M ? M.modulos.reduce(function (a, m) { return a + m.itens.filter(function (i) { return i.tipo !== 'H'; }).length; }, 0) : 0;
+    var tab = sub === 'revisao' ? sub : 'notas';
     var done = LSget('done', {}), nd = notas.filter(function (n) { return done[n.id]; }).length;
-    var h = '<div class="page" style="--c:' + cvar(sig) + '"><div class="head dhead"><span class="eyebrow">' + esc(sig) + (d.professor ? ' · ' + esc(d.professor) : '') + '</span><h1>' + esc(d.nome || 'Nome a confirmar') + '</h1>' +
+    var h = '<div class="page" style="--c:' + cvar(sig) + '"><div class="head dhead"><span class="eyebrow"><a href="#/anotacoes">Anotações</a> · ' + esc(sig) + (d.professor ? ' · ' + esc(d.professor) : '') + '</span><h1>' + esc(d.nome || 'Nome a confirmar') + '</h1>' +
       (d.descricao ? '<p class="lead">' + esc(d.descricao) + '</p>' : '') +
       (notas.length ? '<div class="prog"><span class="track"><i style="width:' + Math.round(nd / notas.length * 100) + '%"></i></span>' + nd + ' de ' + notas.length + ' revisadas</div>' : '') + '</div>';
     var base = '#/anotacoes/' + sig.toLowerCase();
-    h += '<div class="tabs" role="tablist">' + [['notas', 'Anotações', notas.length, base], ['revisao', 'Revisão', qs.length, base + '/revisao'], ['materiais', 'Materiais', nMat, base + '/materiais'], ['datas', 'Datas', pz.length, base + '/datas']].map(function (t) {
+    h += '<div class="tabs" role="tablist">' + [['notas', 'Anotações', notas.length, base], ['revisao', 'Revisão', qs.length, base + '/revisao']].map(function (t) {
       return '<button role="tab" aria-selected="' + (tab === t[0]) + '" data-go="' + t[3] + '">' + t[1] + '<span class="n">' + t[2] + '</span></button>';
     }).join('') + '</div>';
     if (tab === 'notas') {
@@ -321,10 +356,10 @@
         });
         h += '</section>';
       });
-    } else if (tab === 'revisao') h += flashHTML(sig, qs);
-    else if (tab === 'materiais') h += matHTML(M);
-    else h += rows(pz, { noSig: true }) + '<p class="muted">As mesmas datas da agenda.</p>';
+    } else h += flashHTML(sig, qs);
     if (N.atualizadoEm) h += '<p class="muted" style="font-size:13px">Anotações atualizadas em ' + dmy(N.atualizadoEm.slice(0, 10)) + (N.fonte ? ' · fonte: ' + esc(N.fonte) : '') + '</p>';
+    var nx = nextOf(sig);
+    h += '<p class="muted" style="font-size:14px">Mesma disciplina em outros espaços: <a href="#/materiais/' + sig.toLowerCase() + '">Materiais do Canvas</a> · <a href="#/agenda/disciplinas#' + sig + '">Datas na agenda</a>' + (nx ? ' (próxima: ' + dm(nx.data) + ', ' + esc(nx.titulo) + ')' : '') + '</p>';
     return h + '</div>';
   }
   var TIPO = { F: 'Arquivo', P: 'Página', L: 'Link', Q: 'Questionário', A: 'Tarefa', D: 'Fórum' };
@@ -424,25 +459,37 @@
   }
 
   /* ---------- roteamento ---------- */
-  function route() { return (location.hash.replace(/^#\/?/, '') || '').split('/'); }
+  var OLD = { calendario: 'agenda/calendario', atividades: 'agenda/atividades', disciplinas: 'agenda/disciplinas', avisos: 'agenda/avisos' };
+  function route() {
+    var raw = location.hash.replace(/^#\/?/, '') || '';
+    var parts = raw.split('#'); S.anchor = parts[1] || '';
+    var r = parts[0].split('/');
+    if (OLD[r[0]]) { location.replace('#/' + OLD[r[0]]); return OLD[r[0]].split('/'); }
+    return r;
+  }
+  function isSig(x) { return x && ORDER.indexOf(x.toUpperCase()) >= 0; }
   function render() {
     if (!S.agenda) return;
     var r = route(), h;
-    document.querySelectorAll('#nav a').forEach(function (a) { a.toggleAttribute('aria-current', a.dataset.r === r[0]); if (a.dataset.r === r[0]) a.setAttribute('aria-current', 'page'); });
-    if (r[0] === 'calendario') h = vCal();
-    else if (r[0] === 'atividades') h = vAtiv();
-    else if (r[0] === 'disciplinas') h = vDisc();
-    else if (r[0] === 'avisos') h = vAvisos();
-    else if (r[0] === 'anotacoes' && r[1] && ORDER.indexOf(r[1].toUpperCase()) >= 0) h = vNotebook(r[1].toUpperCase(), r[2], r[3]);
+    document.querySelectorAll('#nav a').forEach(function (a) { if (a.dataset.r === r[0]) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    if (r[0] === 'agenda') {
+      var sub = r[1] || '';
+      h = sub === 'calendario' ? vCal() : sub === 'atividades' ? vAtiv() : sub === 'disciplinas' ? vDisc() : sub === 'avisos' ? vAvisos() : vHome();
+      h = h.replace('<div class="page">', '<div class="page">' + agendaNav(sub));
+    }
+    else if (r[0] === 'anotacoes' && isSig(r[1])) h = vNotebook(r[1].toUpperCase(), r[2], r[3]);
     else if (r[0] === 'anotacoes') h = vNotesHome();
-    else h = vHome();
+    else if (r[0] === 'materiais' && isSig(r[1])) h = vMatDisc(r[1].toUpperCase());
+    else if (r[0] === 'materiais') h = vMatHome();
+    else h = vInicio();
     var focusId = document.activeElement && document.activeElement.id, pos = focusId && document.activeElement.selectionStart;
     app.innerHTML = h;
     if (focusId && document.getElementById(focusId)) { var el = document.getElementById(focusId); el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { } }
     if (r[0] === 'anotacoes' && !r[1] && S.q) searchNotes(S.q);
     if (r[2] === 'n' && r[3]) { var n = document.getElementById('n-' + r[3]); if (n) setTimeout(function () { n.scrollIntoView({ block: 'start' }); }, 30); }
-    var title = { calendario: 'Calendário', atividades: 'Atividades', disciplinas: 'Disciplinas', avisos: 'Avisos', anotacoes: 'Anotações' }[r[0]];
-    document.title = (title ? title + ' — ' : '') + 'Agenda Jurídica | Turma de Direito';
+    if (S.anchor) { var an = document.getElementById('d-' + S.anchor); if (an) setTimeout(function () { an.scrollIntoView({ block: 'start' }); }, 30); }
+    var title = { agenda: 'Agenda', anotacoes: 'Anotações', materiais: 'Materiais do Canvas' }[r[0]];
+    document.title = (title ? title + ' · ' : '') + 'Direito · Turma 2026';
   }
   window.addEventListener('hashchange', function () { render(); window.scrollTo(0, 0); });
 

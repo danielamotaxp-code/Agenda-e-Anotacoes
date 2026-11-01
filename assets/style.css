@@ -3,7 +3,7 @@
   --ivory:#F7F3EA; --paper:#FFFDF8; --navy:#1B2A4A; --navy-2:#2B3D63; --ink:#1E2433; --muted:#626B7C; --line:#E4DDCD;
   --gold:#B08D43; --gold-soft:#F1E7CF; --mark:#F5E3A3;
   --ok:#2E6B45; --ok-bg:#E3F0E6; --warn:#8A5A06; --warn-bg:#FAEBCC; --tbd:#5B6475; --tbd-bg:#ECEDF0; --hot:#9A2F2F; --hot-bg:#F7E1DE;
-  --CUL:#8A4F2F; --TEO:#2F5F8A; --HIST:#1F5C4A; --CID:#6B4F8A; --DHF:#8A2F55; --LAB:#4F6B2F; --FIL:#2F4F8A; --SOC:#7A6A2A;
+  --CUL:#8A4F2F; --TEO:#2F5F8A; --HIST:#1F5C4A; --CID:#6B4F8A; --DHF:#8A2F55; --LAB:#4F6B2F; --FIL:#2F4F8A; --SOC:#7A6A2A; --LIB:#2F7A7A;
   --f-head:"EB Garamond", Garamond, Georgia, serif;
   --f-ui:"Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
   --f-mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
@@ -165,6 +165,24 @@ details[open]>summary .chev{transform:rotate(90deg)}
 .form .chk{flex-direction:row;align-items:center;gap:8px}
 .form .input,.form .select{flex:none;width:100%}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:50}
+/* início: três espaços */
+.spaces{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media (max-width:860px){.spaces{grid-template-columns:minmax(0,1fr)}}
+.space{display:flex;flex-direction:column;gap:10px;padding:22px;text-decoration:none;color:inherit;border-top:5px solid var(--sp);transition:border-color .15s,box-shadow .15s}
+.space:hover{box-shadow:0 2px 0 var(--line),0 10px 24px -18px rgba(27,42,74,.5)}
+.space h2{font-size:30px}
+.space p{margin:0;color:var(--muted)}
+.space ul{margin:4px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:14px;border-top:1px dashed var(--line);padding-top:10px}
+.space ul b{font:500 13px var(--f-mono);color:var(--navy);margin-right:4px}
+.space .go{margin-top:auto;font-weight:600;color:var(--sp)}
+.sp-agenda{--sp:var(--navy)}.sp-notes{--sp:#1F5C4A}.sp-mat{--sp:var(--gold)}
+/* menu interno da agenda */
+.subnav{display:flex;gap:4px;flex-wrap:wrap;padding:4px;background:var(--paper);border:1px solid var(--line);border-radius:12px;align-self:flex-start;max-width:100%;overflow-x:auto}
+.subnav a{padding:7px 13px;border-radius:9px;text-decoration:none;color:var(--muted);font-weight:600;font-size:14.5px;white-space:nowrap}
+.subnav a:hover{color:var(--navy)}
+.subnav a[aria-current="page"]{background:var(--navy);color:#F7F1E0}
+.eyebrow a{color:inherit}
+section[id^="d-"]{scroll-margin-top:90px}
 /* materiais do Canvas */
 .mats{display:flex;flex-direction:column}
 .mat{display:grid;grid-template-columns:88px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);text-decoration:none;color:var(--ink)}
