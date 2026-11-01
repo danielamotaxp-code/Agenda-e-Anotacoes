@@ -1,7 +1,8 @@
 /* Agenda Jurídica — site estático. Dados em data/*.json, atualizados pelo Claude via GitHub. */
 (function () {
   'use strict';
-  var ORDER = ['CUL', 'TEO', 'HIST', 'CID', 'DHF', 'LAB', 'FIL', 'SOC', 'LIB'];
+  var BASE = ['CUL', 'TEO', 'HIST', 'CID', 'DHF', 'LAB', 'FIL', 'SOC', 'LIB'];
+  var ORDER = BASE.slice();
   var STATUS = { 'confirmada': 'Confirmada', 'prevista': 'Prevista', 'a-confirmar': 'A confirmar', 'a-definir': 'A definir' };
   var SECOES = [
     ['provas', 'Provas'], ['atividades', 'Atividades Avaliativas'], ['trabalhos', 'Trabalhos'],
@@ -31,7 +32,15 @@
   function discInfo(sig) { for (var i = 0; i < S.disc.length; i++) if (S.disc[i].sigla === sig) return S.disc[i]; return { sigla: sig, nome: '', professor: '' }; }
   function sigChip(sig) { return '<span class="sig" style="--c:' + cvar(sig) + '">' + esc(sig) + '</span>'; }
   function byDate(a, b) { var x = a.data || '9999', y = b.data || '9999'; return x < y ? -1 : x > y ? 1 : ORDER.indexOf(a.disc) - ORDER.indexOf(b.disc); }
-  function evs() { return (S.agenda && S.agenda.eventos) || []; }
+  function evs() { return ((S.agenda && S.agenda.eventos) || []).filter(function (e) { return ORDER.indexOf(e.disc) >= 0; }); }
+  function semList() { return S.sems || [{ id: 1, nome: '1º semestre', status: 'atual' }]; }
+  function semInfo(id) { return semList().filter(function (x) { return x.id === id; })[0] || { id: id, nome: id + 'º semestre' }; }
+  function setSem(id) {
+    S.sem = id; LSset('sem', id);
+    var ds = S.allDisc.filter(function (d) { return (d.semestre || 1) === id; });
+    ORDER = ds.map(function (d) { return d.sigla; }).sort(function (a, b) { var x = BASE.indexOf(a), y = BASE.indexOf(b); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y); });
+    var sm = document.getElementById('brand-sem'); if (sm) sm.textContent = 'Turma PUC Minas · ' + semInfo(id).nome;
+  }
   function stPill(e) {
     var d = days(e.data);
     if (e.status === 'confirmada' && d !== null && d >= 0 && d <= 3) return '<span class="pill st-soon">' + (d === 0 ? 'hoje' : d === 1 ? 'amanhã' : 'em ' + d + ' dias') + '</span>';
@@ -95,10 +104,26 @@
     var extra = [];
     if (e.detalhes) extra.push(esc(e.detalhes));
     if (e.grupo) extra.push(esc(e.grupo));
-    return '<div class="row' + (isPast(e) ? ' dim' : '') + '"><div class="d">' + date + '<small>' + sub + '</small></div>' +
+    var inner = '<div class="d">' + date + '<small>' + sub + '</small></div>' +
       (opts.noSig ? '<span></span>' : sigChip(e.disc)) +
       '<div class="t"><b>' + esc(e.titulo) + '</b>' + (extra.length ? '<p>' + extra.join(' · ') + '</p>' : '') + '</div>' +
-      '<div class="meta">' + stPill(e) + (e.pontos ? '<span class="pts">' + esc(e.pontos) + '</span>' : '') + '</div></div>';
+      '<div class="meta">' + stPill(e) + (e.pontos ? '<span class="pts">' + esc(e.pontos) + '</span>' : '') + '</div>';
+    return '<details class="row-x' + (isPast(e) && !opts.noDim ? ' dim' : '') + '" style="--c:' + cvar(e.disc) + '"><summary class="row">' + inner + '<svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4l6 6-6 6"/></svg></summary>' + evBody(e) + '</details>';
+  }
+  function evBody(e) {
+    var d = discInfo(e.disc), h = '<div class="evd">';
+    h += '<div class="evd-meta"><span><b>Disciplina:</b> ' + esc(d.nome || e.disc) + '</span>' +
+      '<span><b>Data:</b> ' + (e.data ? dmy(e.data) + ' (' + wd(e.data) + ')' + (e.fim ? ' a ' + dmy(e.fim) : '') : 'a definir') + '</span>' +
+      '<span><b>Valor:</b> ' + (e.pontos ? esc(e.pontos) : 'não informado') + '</span>' +
+      '<span><b>Situação:</b> ' + esc(STATUS[e.status] || e.status) + '</span></div>';
+    if (e.descricao_md) h += '<div class="prose">' + md(e.descricao_md) + '</div>';
+    else h += '<p class="muted">Sem orientações publicadas ainda. ' + (e.detalhes ? esc(e.detalhes) : '') + '</p>';
+    var links = (e.arquivos || []).slice();
+    if (e.canvas) links.unshift({ titulo: 'Abrir a tarefa no Canvas', url: e.canvas, canvas: 1 });
+    if (links.length) h += '<div class="evd-files"><b>Arquivos e links</b>' + links.map(function (a) { return '<a target="_blank" rel="noopener" href="' + esc(a.url) + '">' + esc(a.titulo) + ' ↗</a>'; }).join('') + '</div>';
+    var rs = resList().filter(function (r) { return r.evento === e.id; })[0];
+    if (rs) h += '<div class="evd-files"><b>Para estudar</b><a href="#/resumos/' + esc(rs.id) + '">Resumo desta avaliação →</a><a href="#/anotacoes/' + e.disc.toLowerCase() + '/revisao">Questões de revisão →</a></div>';
+    return h + '</div>';
   }
   function rows(list, opts) { return list.length ? '<div class="card rows">' + list.map(function (e) { return rowHTML(e, opts); }).join('') + '</div>' : '<div class="card empty">Nada por aqui.</div>'; }
 
@@ -125,6 +150,9 @@
   }
   function usar(bundle) {
     S.agenda = bundle.agenda; S.disc = (bundle.disciplinas && bundle.disciplinas.disciplinas) || [];
+    S.allDisc = S.disc; S.sems = (bundle.disciplinas && bundle.disciplinas.semestres) || null;
+    var cur = semList().filter(function (x) { return x.status === 'atual'; })[0];
+    setSem(LSget('sem', cur ? cur.id : 1));
     S.notes = bundle.anotacoes || {};
     S.mat = bundle.materiais || null;
     S.res = bundle.resumos || null;
@@ -193,7 +221,9 @@
     var t = today(), next = evs().filter(function (e) { return e.data && !isPast(e); }).sort(byDate).slice(0, 3);
     var nNotas = 0, nPerg = 0, nMat = 0;
     ORDER.forEach(function (s) { var d = discInfo(s); nNotas += d.notas || 0; nPerg += d.perguntas || 0; nMat += countMat(s); });
-    var h = '<div class="page"><div class="head"><span class="eyebrow">Turma de Direito · PUC Minas · 2026/2</span><h1>Direito</h1><hr class="rule"><p class="lead">Hoje é ' + WD[t.getDay()] + ', ' + dmy(iso(t)) + '. Escolha um dos espaços.</p></div><div class="spaces">';
+    var h = '<div class="page"><div class="head"><span class="eyebrow">Turma de Direito · PUC Minas</span><h1>Direito</h1><hr class="rule"><p class="lead">Hoje é ' + WD[t.getDay()] + ', ' + dmy(iso(t)) + '. Escolha o semestre e um dos espaços.</p></div>' + semBar();
+    if (!ORDER.length) return h + '<div class="card empty sem-empty"><h2>' + esc(semInfo(S.sem).nome) + '</h2><p>Este semestre ainda não começou. Quando as disciplinas chegarem, vamos programar juntos a agenda, as anotações, os resumos e os materiais deste semestre.</p><button class="btn primary" data-sem="' + (semList().filter(function (x) { return x.status === 'atual'; })[0] || { id: 1 }).id + '">Voltar ao semestre atual</button></div></div>';
+    h += '<div class="spaces">';
     h += '<a class="card space sp-agenda" href="#/agenda"><span class="eyebrow">Espaço 1</span><h2>Agenda</h2><p>Calendário, provas, trabalhos, avaliações globais e avisos para o WhatsApp.</p><ul>' +
       (next.length ? next.map(function (e) { return '<li><b>' + dm(e.data) + '</b> ' + esc(e.disc) + ' · ' + esc(e.titulo) + '</li>'; }).join('') : '<li>Nenhum prazo próximo.</li>') + '</ul><span class="go">Abrir a agenda →</span></a>';
     h += '<a class="card space sp-notes" href="#/anotacoes"><span class="eyebrow">Espaço 2</span><h2>Anotações</h2><p>Resumos das aulas por disciplina e perguntas de revisão para as provas.</p><ul><li><b>' + nNotas + '</b> anotações</li><li><b>' + nPerg + '</b> perguntas de revisão</li></ul><span class="go">Abrir o caderno →</span></a>';
@@ -204,8 +234,14 @@
     h += '<a class="card space sp-pdf" href="#/pdf"><span class="eyebrow">Espaço 5</span><h2>Baixar em PDF</h2><p>Anotações, questões e resumos de cada disciplina em PDF, atualizados até a última data publicada.</p><ul><li><b>' + nPerg + '</b> questões · <b>' + resList().length + '</b> resumos</li></ul><span class="go">Gerar PDF →</span></a>';
     return h + '</div></div>';
   }
+  function semBar() {
+    return '<nav class="sems" aria-label="Semestres">' + semList().map(function (x) {
+      var n = S.allDisc.filter(function (d) { return (d.semestre || 1) === x.id; }).length;
+      return '<button class="sem' + (x.id === S.sem ? ' on' : '') + (n ? '' : ' fut') + '" data-sem="' + x.id + '"><b>' + esc(x.nome) + '</b><small>' + (n ? n + ' disciplinas' + (x.periodo ? ' · ' + esc(x.periodo) : '') : 'em breve') + '</small></button>';
+    }).join('') + '</nav>';
+  }
   function agendaNav(sub) {
-    return '<nav class="subnav" aria-label="Agenda">' + [['', 'Visão geral'], ['calendario', 'Calendário'], ['atividades', 'Atividades'], ['disciplinas', 'Por disciplina'], ['avisos', 'Avisos']].map(function (x) {
+    return '<nav class="subnav" aria-label="Agenda">' + [['', 'Visão geral'], ['calendario', 'Calendário'], ['atividades', 'Atividades'], ['disciplinas', 'Por disciplina'], ['encerradas', 'Encerradas'], ['avisos', 'Avisos']].map(function (x) {
       return '<a href="#/agenda' + (x[0] ? '/' + x[0] : '') + '"' + ((sub || '') === x[0] ? ' aria-current="page"' : '') + '>' + x[1] + '</a>';
     }).join('') + '</nav>';
   }
@@ -229,7 +265,7 @@
 
   /* ---------- calendário ---------- */
   function vCal() {
-    if (!S.cal) { var t = today(); S.cal = { y: t.getFullYear(), m: t.getMonth() }; }
+    if (!S.cal) { var t = today(); S.cal = { y: t.getFullYear(), m: t.getMonth() }; if (!S.calSel) S.calSel = iso(t); }
     var y = S.cal.y, m = S.cal.m, first = new Date(y, m, 1), start = addD(first, -first.getDay());
     var E = evs().filter(function (e) { return e.data; });
     var h = '<div class="page"><div class="head"><span class="eyebrow">Calendário</span></div>';
@@ -264,6 +300,20 @@
     return h + '</div>';
   }
 
+  /* ---------- encerradas ---------- */
+  function vPast() {
+    var E = evs().filter(function (e) { return e.data && isPast(e); }).sort(function (a, b) { return byDate(b, a); });
+    var h = '<div class="page"><div class="head"><span class="eyebrow">Agenda · Encerradas</span><h1>Atividades encerradas</h1><p class="lead">Tudo o que já passou neste semestre, da mais recente para a mais antiga. Toque em uma atividade para ver o que foi pedido.</p></div>';
+    if (!E.length) return h + '<div class="card empty">Nenhuma atividade encerrada ainda.</div></div>';
+    var months = [];
+    E.forEach(function (e) { var k = e.data.slice(0, 7); if (months.indexOf(k) < 0) months.push(k); });
+    months.forEach(function (k) {
+      var L = E.filter(function (e) { return e.data.slice(0, 7) === k; });
+      h += '<section><h2>' + MESES[+k.slice(5, 7) - 1].replace(/^./, function (c) { return c.toUpperCase(); }) + ' de ' + k.slice(0, 4) + ' <span class="muted" style="font-size:16px">(' + L.length + ')</span></h2>' + rows(L, { noDim: true }) + '</section>';
+    });
+    return h + '</div>';
+  }
+
   /* ---------- atividades ---------- */
   var F = { q: '', disc: '', secao: '', status: '', past: false };
   function vAtiv() {
@@ -272,7 +322,7 @@
       if (F.secao && e.secao !== F.secao) return false;
       if (F.status && e.status !== F.status) return false;
       if (!F.past && isPast(e)) return false;
-      if (F.q) { var s = (e.titulo + ' ' + (e.detalhes || '') + ' ' + e.disc).toLowerCase(); if (s.indexOf(F.q.toLowerCase()) < 0) return false; }
+      if (F.q) { var s = (e.titulo + ' ' + (e.detalhes || '') + ' ' + (e.descricao_md || '') + ' ' + e.disc).toLowerCase(); if (s.indexOf(F.q.toLowerCase()) < 0) return false; }
       return true;
     }).sort(byDate);
     var groups = [
@@ -373,8 +423,8 @@
   function matHTML(M) {
     if (!M || !M.modulos.length) return '<div class="card empty">Nenhum material encontrado no Canvas desta disciplina.</div>';
     var base = (S.mat && S.mat.base) || 'https://pucminas.instructure.com';
-    var h = '<div class="bar" style="justify-content:space-between"><p class="muted" style="margin:0;font-size:14px">Os links abrem no Canvas da PUC, com o seu login. Lista atualizada em ' + dmy(S.mat.atualizadoEm) + '.</p>' +
-      '<a class="btn" target="_blank" rel="noopener" href="' + esc(base + '/courses/' + M.curso) + '">Abrir disciplina no Canvas ↗</a></div>';
+    var h = '<div class="bar" style="justify-content:space-between"><p class="muted" style="margin:0;font-size:14px">Os links abrem no Canvas da PUC. Se você não estiver logado, o Canvas mostra primeiro a tela de login com a sua conta da PUC. Lista atualizada em ' + dmy(S.mat.atualizadoEm) + '.</p>' +
+      '<span class="bar" style="margin:0"><a class="btn" target="_blank" rel="noopener" href="' + esc(base + '/login') + '">Entrar no Canvas ↗</a><a class="btn" target="_blank" rel="noopener" href="' + esc(base + '/courses/' + M.curso) + '">Abrir disciplina no Canvas ↗</a></span></div>';
     M.modulos.forEach(function (m) {
       if (!m.itens.length) return;
       h += '<section class="unit"><h3>' + esc(m.nome) + '</h3><div class="card mats">';
@@ -411,7 +461,7 @@
   }
 
   /* ---------- resumos para provas ---------- */
-  function resList() { return (S.res && S.res.resumos) || []; }
+  function resList() { return ((S.res && S.res.resumos) || []).filter(function (r) { return ORDER.indexOf(r.disc) >= 0; }); }
   function resEv(r) { return r.evento ? evs().filter(function (e) { return e.id === r.evento; })[0] : null; }
   function resDate(r) { var e = resEv(r); return (e && e.data) || r.data || null; }
   function resSort(a, b) { var x = resDate(a) || '9999', y = resDate(b) || '9999'; return x < y ? -1 : x > y ? 1 : ORDER.indexOf(a.disc) - ORDER.indexOf(b.disc); }
@@ -489,7 +539,7 @@
   function printDoc(title, body) {
     var root = document.getElementById('printroot');
     if (!root) { root = document.createElement('div'); root.id = 'printroot'; document.body.appendChild(root); }
-    root.innerHTML = '<div class="pdoc">' + body + '<p class="p-foot">Direito · Turma PUC Minas 2026/2 · gerado em ' + dmy(iso(today())) + '. Material de estudo da turma, feito a partir das aulas, do Canvas e dos grupos. Confira sempre com os professores.</p></div>';
+    root.innerHTML = '<div class="pdoc">' + body + '<p class="p-foot">Direito · Turma PUC Minas · ' + esc(semInfo(S.sem).nome) + ' · gerado em ' + dmy(iso(today())) + '. Material de estudo da turma, feito a partir das aulas, do Canvas e dos grupos. Confira sempre com os professores.</p></div>';
     var old = document.title; document.title = title.replace(/[\\/:*?"<>|]/g, '-');
     document.body.classList.add('printing');
     var done = function () { document.body.classList.remove('printing'); document.title = old; window.removeEventListener('afterprint', done); };
@@ -599,7 +649,7 @@
     document.querySelectorAll('#nav a').forEach(function (a) { if (a.dataset.r === r[0]) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     if (r[0] === 'agenda') {
       var sub = r[1] || '';
-      h = sub === 'calendario' ? vCal() : sub === 'atividades' ? vAtiv() : sub === 'disciplinas' ? vDisc() : sub === 'avisos' ? vAvisos() : vHome();
+      h = sub === 'calendario' ? vCal() : sub === 'atividades' ? vAtiv() : sub === 'disciplinas' ? vDisc() : sub === 'encerradas' ? vPast() : sub === 'avisos' ? vAvisos() : vHome();
       h = h.replace('<div class="page">', '<div class="page">' + agendaNav(sub));
     }
     else if (r[0] === 'anotacoes' && isSig(r[1])) h = vNotebook(r[1].toUpperCase(), r[2], r[3]);
@@ -617,13 +667,14 @@
     if (r[2] === 'n' && r[3]) { var n = document.getElementById('n-' + r[3]); if (n) setTimeout(function () { n.scrollIntoView({ block: 'start' }); }, 30); }
     if (S.anchor) { var an = document.getElementById('d-' + S.anchor); if (an) setTimeout(function () { an.scrollIntoView({ block: 'start' }); }, 30); }
     var title = { agenda: 'Agenda', anotacoes: 'Anotações', materiais: 'Materiais do Canvas', resumos: 'Resumos para provas', pdf: 'Baixar em PDF' }[r[0]];
-    document.title = (title ? title + ' · ' : '') + 'Direito · Turma 2026';
+    document.title = (title ? title + ' · ' : '') + 'Direito · Turma PUC Minas';
   }
   window.addEventListener('hashchange', function () { render(); window.scrollTo(0, 0); });
 
   document.addEventListener('click', function (ev) {
-    var t = ev.target.closest('[data-pdf],[data-act],[data-cal],[data-day],[data-go],[data-tema],[data-fc]'); if (!t) return;
+    var t = ev.target.closest('[data-sem],[data-pdf],[data-act],[data-cal],[data-day],[data-go],[data-tema],[data-fc]'); if (!t) return;
     var r = route(), sig = (r[1] || '').toUpperCase();
+    if (t.dataset.sem) { setSem(+t.dataset.sem); S.notes = S.notes; location.hash = '#/'; render(); return; }
     if (t.dataset.pdf) { makePDF(t.dataset.pdf, t.dataset.sig, t.dataset.id); return; }
     if (t.dataset.act === 'sair') { try { localStorage.removeItem('aj:key'); } catch (e) { } location.hash = ''; location.reload(); }
     else if (t.dataset.act === 'ics') ics();
