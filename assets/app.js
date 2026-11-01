@@ -127,6 +127,7 @@
     S.agenda = bundle.agenda; S.disc = (bundle.disciplinas && bundle.disciplinas.disciplinas) || [];
     S.notes = bundle.anotacoes || {};
     S.mat = bundle.materiais || null;
+    S.res = bundle.resumos || null;
     document.body.classList.remove('locked');
     var fu = document.getElementById('foot-upd');
     if (fu) fu.innerHTML = 'Agenda atualizada em ' + dmy(S.agenda.atualizadoEm) + '. <button class="linkbtn" data-act="sair">Sair deste aparelho</button>';
@@ -192,11 +193,15 @@
     var t = today(), next = evs().filter(function (e) { return e.data && !isPast(e); }).sort(byDate).slice(0, 3);
     var nNotas = 0, nPerg = 0, nMat = 0;
     ORDER.forEach(function (s) { var d = discInfo(s); nNotas += d.notas || 0; nPerg += d.perguntas || 0; nMat += countMat(s); });
-    var h = '<div class="page"><div class="head"><span class="eyebrow">Turma de Direito · PUC Minas · 2026/2</span><h1>Direito</h1><hr class="rule"><p class="lead">Hoje é ' + WD[t.getDay()] + ', ' + dmy(iso(t)) + '. Escolha um dos três espaços.</p></div><div class="spaces">';
+    var h = '<div class="page"><div class="head"><span class="eyebrow">Turma de Direito · PUC Minas · 2026/2</span><h1>Direito</h1><hr class="rule"><p class="lead">Hoje é ' + WD[t.getDay()] + ', ' + dmy(iso(t)) + '. Escolha um dos espaços.</p></div><div class="spaces">';
     h += '<a class="card space sp-agenda" href="#/agenda"><span class="eyebrow">Espaço 1</span><h2>Agenda</h2><p>Calendário, provas, trabalhos, avaliações globais e avisos para o WhatsApp.</p><ul>' +
       (next.length ? next.map(function (e) { return '<li><b>' + dm(e.data) + '</b> ' + esc(e.disc) + ' · ' + esc(e.titulo) + '</li>'; }).join('') : '<li>Nenhum prazo próximo.</li>') + '</ul><span class="go">Abrir a agenda →</span></a>';
     h += '<a class="card space sp-notes" href="#/anotacoes"><span class="eyebrow">Espaço 2</span><h2>Anotações</h2><p>Resumos das aulas por disciplina e perguntas de revisão para as provas.</p><ul><li><b>' + nNotas + '</b> anotações</li><li><b>' + nPerg + '</b> perguntas de revisão</li></ul><span class="go">Abrir o caderno →</span></a>';
-    h += '<a class="card space sp-mat" href="#/materiais"><span class="eyebrow">Espaço 3</span><h2>Materiais do Canvas</h2><p>Textos, slides, videoaulas e tarefas de cada disciplina, com link direto para o Canvas.</p><ul><li><b>' + nMat + '</b> itens em ' + ORDER.length + ' disciplinas</li>' + (S.mat ? '<li>Atualizado em ' + dmy(S.mat.atualizadoEm) + '</li>' : '') + '</ul><span class="go">Abrir os materiais →</span></a>';
+    var R = resList().slice().sort(resSort).filter(function (r) { var d = resDate(r); return d && pd(d) >= today(); }).slice(0, 3);
+    h += '<a class="card space sp-res" href="#/resumos"><span class="eyebrow">Espaço 3</span><h2>Resumos para provas</h2><p>Um resumo por avaliação e os resumos do ano para as globais.</p><ul>' +
+      (R.length ? R.map(function (r) { return '<li><b>' + dm(resDate(r)) + '</b> ' + esc(r.disc) + ' · ' + esc(r.titulo) + '</li>'; }).join('') : '<li>' + resList().length + ' resumos</li>') + '</ul><span class="go">Abrir os resumos →</span></a>';
+    h += '<a class="card space sp-mat" href="#/materiais"><span class="eyebrow">Espaço 4</span><h2>Materiais do Canvas</h2><p>Textos, slides, videoaulas e tarefas de cada disciplina, com link direto para o Canvas.</p><ul><li><b>' + nMat + '</b> itens em ' + ORDER.length + ' disciplinas</li>' + (S.mat ? '<li>Atualizado em ' + dmy(S.mat.atualizadoEm) + '</li>' : '') + '</ul><span class="go">Abrir os materiais →</span></a>';
+    h += '<a class="card space sp-pdf" href="#/pdf"><span class="eyebrow">Espaço 5</span><h2>Baixar em PDF</h2><p>Anotações, questões e resumos de cada disciplina em PDF, atualizados até a última data publicada.</p><ul><li><b>' + nPerg + '</b> questões · <b>' + resList().length + '</b> resumos</li></ul><span class="go">Gerar PDF →</span></a>';
     return h + '</div></div>';
   }
   function agendaNav(sub) {
@@ -341,6 +346,7 @@
     var h = '<div class="page" style="--c:' + cvar(sig) + '"><div class="head dhead"><span class="eyebrow"><a href="#/anotacoes">Anotações</a> · ' + esc(sig) + (d.professor ? ' · ' + esc(d.professor) : '') + '</span><h1>' + esc(d.nome || 'Nome a confirmar') + '</h1>' +
       (d.descricao ? '<p class="lead">' + esc(d.descricao) + '</p>' : '') +
       (notas.length ? '<div class="prog"><span class="track"><i style="width:' + Math.round(nd / notas.length * 100) + '%"></i></span>' + nd + ' de ' + notas.length + ' revisadas</div>' : '') + '</div>';
+    h += '<div class="bar"><button class="btn" data-pdf="notas" data-sig="' + sig + '">Anotações em PDF</button><button class="btn" data-pdf="questoes" data-sig="' + sig + '">Questões em PDF</button>' + (resList().some(function (r) { return r.disc === sig; }) ? '<a class="btn" href="#/resumos">Resumos para provas</a>' : '') + '</div>';
     var base = '#/anotacoes/' + sig.toLowerCase();
     h += '<div class="tabs" role="tablist">' + [['notas', 'Anotações', notas.length, base], ['revisao', 'Revisão', qs.length, base + '/revisao']].map(function (t) {
       return '<button role="tab" aria-selected="' + (tab === t[0]) + '" data-go="' + t[3] + '">' + t[1] + '<span class="n">' + t[2] + '</span></button>';
@@ -402,6 +408,125 @@
     h += '<div class="acts">' + (st.show ? '<button class="btn good" data-fc="ok">Acertei</button><button class="btn bad" data-fc="no">Revisar de novo</button>' : '<button class="btn primary" data-fc="show">Mostrar resposta</button>') +
       '<span style="flex:1"></span><button class="btn" data-fc="prev"' + (st.i === 0 ? ' disabled' : '') + '>Anterior</button><button class="btn" data-fc="next">Próxima</button></div></div>';
     return h + '<p class="muted" style="font-size:13px">' + sc.ok + ' acertos · ' + sc.no + ' para revisar (salvo só neste aparelho)</p>';
+  }
+
+  /* ---------- resumos para provas ---------- */
+  function resList() { return (S.res && S.res.resumos) || []; }
+  function resEv(r) { return r.evento ? evs().filter(function (e) { return e.id === r.evento; })[0] : null; }
+  function resDate(r) { var e = resEv(r); return (e && e.data) || r.data || null; }
+  function resSort(a, b) { var x = resDate(a) || '9999', y = resDate(b) || '9999'; return x < y ? -1 : x > y ? 1 : ORDER.indexOf(a.disc) - ORDER.indexOf(b.disc); }
+  function resCard(r) {
+    var e = resEv(r), dt = resDate(r), n = days(dt);
+    var when = dt ? dm(dt) + ' (' + wd(dt) + ')' + (n !== null && n >= 0 ? ' · ' + (n === 0 ? 'hoje' : n === 1 ? 'amanhã' : 'em ' + n + ' dias') : '') : 'Data a definir';
+    return '<a class="card dcard res-card" style="--c:' + cvar(r.disc) + ';text-decoration:none;color:inherit" href="#/resumos/' + esc(r.id) + '">' + sigChip(r.disc) +
+      '<div class="nm">' + esc(r.titulo) + '</div><div class="meta">' + esc(discInfo(r.disc).nome) + '</div>' +
+      '<div class="next"><b>' + esc(when) + '</b>' + (e && e.pontos ? ' · ' + esc(e.pontos) : '') + (e && e.status && e.status !== 'confirmada' ? ' · ' + esc(STATUS[e.status] || e.status) : '') + '</div>' +
+      (r.pronto === false ? '<span class="pill st-a-definir">Em construção</span>' : '') + '</a>';
+  }
+  function vResHome() {
+    var L = resList().slice().sort(resSort);
+    var up = L.filter(function (r) { var d = resDate(r); return r.tipo !== 'global' && (!d || pd(d) >= today()); });
+    var gl = L.filter(function (r) { return r.tipo === 'global'; });
+    var past = L.filter(function (r) { var d = resDate(r); return r.tipo !== 'global' && d && pd(d) < today(); });
+    var h = '<div class="page"><div class="head"><span class="eyebrow">Resumos para provas</span><h1>Resumos para provas</h1><hr class="rule"><p class="lead">Um resumo para cada avaliação: o que cai, os conceitos-chave e o que costuma confundir. As globais juntam o semestre inteiro. Tudo é refeito a cada atualização do Canvas e dos grupos.</p></div>';
+    h += '<div class="bar"><a class="btn" href="#/pdf">Baixar em PDF</a></div>';
+    h += '<section><h2>Próximas provas</h2>' + (up.length ? '<div class="grid">' + up.map(resCard).join('') + '</div>' : '<div class="card empty">Nenhuma prova próxima com resumo.</div>') + '</section>';
+    h += '<section><h2>Avaliações globais</h2>' + (gl.length ? '<div class="grid">' + gl.map(resCard).join('') + '</div>' : '<div class="card empty">Ainda sem resumos de globais.</div>') + '</section>';
+    if (past.length) h += '<section><h2>Provas já feitas</h2><div class="grid">' + past.map(resCard).join('') + '</div></section>';
+    return h + (S.res && S.res.atualizadoEm ? '<p class="muted" style="font-size:13px">Resumos atualizados em ' + dmy(S.res.atualizadoEm.slice(0, 10)) + '.</p>' : '') + '</div>';
+  }
+  function vResumo(id) {
+    var r = resList().filter(function (x) { return x.id === id; })[0];
+    if (!r) return '<div class="page"><div class="card empty">Resumo não encontrado. <a href="#/resumos">Voltar aos resumos</a></div></div>';
+    var e = resEv(r), dt = resDate(r), sig = r.disc;
+    var h = '<div class="page" style="--c:' + cvar(sig) + '"><div class="head dhead"><span class="eyebrow"><a href="#/resumos">Resumos para provas</a> · ' + esc(sig) + '</span><h1>' + esc(r.titulo) + '</h1>' +
+      '<p class="lead">' + esc(discInfo(sig).nome) + ' · ' + (dt ? dmy(dt) + ' (' + wd(dt) + ')' : 'data a definir') + (e && e.pontos ? ' · ' + esc(e.pontos) : '') + '</p></div>';
+    h += '<div class="bar"><button class="btn primary" data-pdf="resumo" data-id="' + esc(r.id) + '">Baixar este resumo em PDF</button><a class="btn" href="#/anotacoes/' + sig.toLowerCase() + '/revisao">Treinar com as perguntas</a><a class="btn" href="#/anotacoes/' + sig.toLowerCase() + '">Anotações completas</a></div>';
+    if (r.abrange && r.abrange.length) h += '<div class="card res-scope"><b>O que cai</b><ul>' + r.abrange.map(function (a) { return '<li>' + inl(a) + '</li>'; }).join('') + '</ul></div>';
+    h += '<article class="card prose res-body">' + md(r.conteudo_md) + '</article>';
+    return h + '<p class="muted" style="font-size:13px">Resumo atualizado em ' + dmy((r.atualizadoEm || (S.res && S.res.atualizadoEm) || '').slice(0, 10)) + (r.fonte ? ' · ' + esc(r.fonte) : '') + '</p></div>';
+  }
+
+  /* ---------- PDFs (impressão → Salvar como PDF) ---------- */
+  function lastDate(sig) {
+    var N = S.notes[sig] || {}, ds = [N.atualizadoEm];
+    resList().forEach(function (r) { if (r.disc === sig) ds.push(r.atualizadoEm); });
+    ds = ds.filter(Boolean).map(function (s) { return s.slice(0, 10); }).sort();
+    return ds[ds.length - 1] || null;
+  }
+  function pNotas(sig) {
+    var N = S.notes[sig] || {}, notas = (N.anotacoes || []).slice().sort(function (a, b) { return a.ordem - b.ordem; });
+    if (!notas.length) return '<p class="p-empty">Ainda sem anotações desta disciplina.</p>';
+    var h = '', u = null;
+    notas.forEach(function (n) {
+      if ((n.unidade || '') !== u) { u = n.unidade || ''; if (u) h += '<h2 class="p-unit">' + esc(u) + '</h2>'; }
+      h += '<section class="p-note"><h3>' + esc(n.titulo) + '</h3>' + (n.subtitulo ? '<p class="p-sub">' + esc(n.subtitulo) + '</p>' : '') + '<div class="prose">' + md(n.conteudo_md) + '</div></section>';
+    });
+    return h;
+  }
+  function pQuest(sig) {
+    var qs = ((S.notes[sig] || {}).questoes || []).slice().sort(function (a, b) { return a.ordem - b.ordem; });
+    if (!qs.length) return '<p class="p-empty">Ainda sem perguntas de revisão desta disciplina.</p>';
+    var h = '', t = null, i = 0;
+    qs.forEach(function (q) {
+      if ((q.tema || 'Geral') !== t) { t = q.tema || 'Geral'; h += '<h2 class="p-unit">' + esc(t) + '</h2>'; }
+      i++;
+      h += '<section class="p-q"><p class="p-qq"><b>' + i + '.</b> ' + esc(q.pergunta) + '</p><div class="p-ans prose">' + md(q.resposta_md) + '</div>' + (q.fonte ? '<p class="p-src">Fonte: ' + esc(q.fonte) + '</p>' : '') + '</section>';
+    });
+    return h;
+  }
+  function pResumo(r) {
+    var dt = resDate(r), e = resEv(r);
+    return '<section class="p-res"><h2 class="p-unit">' + esc(r.titulo) + '</h2><p class="p-sub">' + (dt ? dmy(dt) : 'Data a definir') + (e && e.pontos ? ' · ' + esc(e.pontos) : '') + '</p>' +
+      (r.abrange && r.abrange.length ? '<div class="p-box"><b>O que cai</b><ul>' + r.abrange.map(function (a) { return '<li>' + inl(a) + '</li>'; }).join('') + '</ul></div>' : '') +
+      '<div class="prose">' + md(r.conteudo_md) + '</div></section>';
+  }
+  function pResumos(sig) {
+    var L = resList().filter(function (r) { return r.disc === sig; }).sort(resSort);
+    return L.length ? L.map(pResumo).join('') : '<p class="p-empty">Ainda sem resumos de prova desta disciplina.</p>';
+  }
+  var KIND = { notas: ['Anotações', pNotas], questoes: ['Questões de revisão', pQuest], resumos: ['Resumos para provas', pResumos] };
+  function printDoc(title, body) {
+    var root = document.getElementById('printroot');
+    if (!root) { root = document.createElement('div'); root.id = 'printroot'; document.body.appendChild(root); }
+    root.innerHTML = '<div class="pdoc">' + body + '<p class="p-foot">Direito · Turma PUC Minas 2026/2 · gerado em ' + dmy(iso(today())) + '. Material de estudo da turma, feito a partir das aulas, do Canvas e dos grupos. Confira sempre com os professores.</p></div>';
+    var old = document.title; document.title = title.replace(/[\\/:*?"<>|]/g, '-');
+    document.body.classList.add('printing');
+    var done = function () { document.body.classList.remove('printing'); document.title = old; window.removeEventListener('afterprint', done); };
+    window.addEventListener('afterprint', done);
+    setTimeout(function () { window.print(); setTimeout(done, 1500); }, 60);
+  }
+  function cover(t, sig, extra) {
+    var d = discInfo(sig), ld = lastDate(sig);
+    return '<header class="p-cover" style="--c:' + cvar(sig) + '"><span class="p-eye">' + esc(t) + '</span><h1>' + esc(d.nome || sig) + '</h1><p>' + esc(sig) + (d.professor ? ' · ' + esc(d.professor) : '') + '</p>' +
+      '<p class="p-upd">Conteúdo atualizado até ' + (ld ? dmy(ld) : '—') + (extra ? ' · ' + esc(extra) : '') + '</p></header>';
+  }
+  function makePDF(kind, sig, id) {
+    if (kind === 'resumo') {
+      var r = resList().filter(function (x) { return x.id === id; })[0]; if (!r) return;
+      printDoc(r.disc + ' - ' + r.titulo, cover('Resumo para prova', r.disc) + pResumo(r)); return;
+    }
+    var sigs = sig ? [sig] : ORDER.filter(function (s) { return kind === 'resumos' ? resList().some(function (r) { return r.disc === s; }) : (S.notes[s] && ((S.notes[s].anotacoes || []).length || (S.notes[s].questoes || []).length)); });
+    var kinds = kind === 'tudo' ? ['resumos', 'notas', 'questoes'] : [kind];
+    var body = sigs.map(function (s, i) {
+      return '<div class="p-disc' + (i ? ' p-break' : '') + '">' + kinds.map(function (k, j) { return (j ? '<div class="p-break"></div>' : '') + cover(KIND[k][0], s) + KIND[k][1](s); }).join('') + '</div>';
+    }).join('');
+    var name = (sig || 'Todas as disciplinas') + ' - ' + (kind === 'tudo' ? 'Material completo' : KIND[kind][0]) + ' - ' + dmy(iso(today())).replace(/\//g, '-');
+    printDoc(name, body || '<p>Nada para baixar ainda.</p>');
+  }
+  function vPDF() {
+    var h = '<div class="page"><div class="head"><span class="eyebrow">Baixar em PDF</span><h1>Baixar em PDF</h1><hr class="rule"><p class="lead">Gere o PDF do que está publicado até a última atualização. Ao tocar no botão, abre a janela de impressão: escolha <b>Salvar como PDF</b> (no celular, use Compartilhar ou Imprimir → Salvar PDF).</p></div>';
+    h += '<div class="card rows pdf-rows">';
+    h += '<div class="pdf-row all"><div class="t"><b>Todas as disciplinas</b><p>Um único PDF com tudo</p></div><div class="pdf-b">' + [['notas', 'Anotações'], ['questoes', 'Questões'], ['resumos', 'Resumos'], ['tudo', 'Tudo']].map(function (k) { return '<button class="btn" data-pdf="' + k[0] + '" data-sig="">' + k[1] + '</button>'; }).join('') + '</div></div>';
+    ORDER.forEach(function (s) {
+      var d = discInfo(s), N = S.notes[s] || {}, nn = (N.anotacoes || []).length, nq = (N.questoes || []).length, nr = resList().filter(function (r) { return r.disc === s; }).length, ld = lastDate(s);
+      h += '<div class="pdf-row" style="--c:' + cvar(s) + '">' + sigChip(s) + '<div class="t"><b>' + esc(d.nome || s) + '</b><p>' + nn + ' anotações · ' + nq + ' questões · ' + nr + ' resumos' + (ld ? ' · atualizado até ' + dmy(ld) : '') + '</p></div><div class="pdf-b">' +
+        '<button class="btn" data-pdf="notas" data-sig="' + s + '"' + (nn ? '' : ' disabled') + '>Anotações</button>' +
+        '<button class="btn" data-pdf="questoes" data-sig="' + s + '"' + (nq ? '' : ' disabled') + '>Questões</button>' +
+        '<button class="btn" data-pdf="resumos" data-sig="' + s + '"' + (nr ? '' : ' disabled') + '>Resumos</button>' +
+        '<button class="btn primary" data-pdf="tudo" data-sig="' + s + '"' + (nn + nq + nr ? '' : ' disabled') + '>Tudo</button></div></div>';
+    });
+    return h + '</div></div>';
   }
 
   /* ---------- avisos ---------- */
@@ -481,6 +606,9 @@
     else if (r[0] === 'anotacoes') h = vNotesHome();
     else if (r[0] === 'materiais' && isSig(r[1])) h = vMatDisc(r[1].toUpperCase());
     else if (r[0] === 'materiais') h = vMatHome();
+    else if (r[0] === 'resumos' && r[1]) h = vResumo(r[1]);
+    else if (r[0] === 'resumos') h = vResHome();
+    else if (r[0] === 'pdf') h = vPDF();
     else h = vInicio();
     var focusId = document.activeElement && document.activeElement.id, pos = focusId && document.activeElement.selectionStart;
     app.innerHTML = h;
@@ -488,14 +616,15 @@
     if (r[0] === 'anotacoes' && !r[1] && S.q) searchNotes(S.q);
     if (r[2] === 'n' && r[3]) { var n = document.getElementById('n-' + r[3]); if (n) setTimeout(function () { n.scrollIntoView({ block: 'start' }); }, 30); }
     if (S.anchor) { var an = document.getElementById('d-' + S.anchor); if (an) setTimeout(function () { an.scrollIntoView({ block: 'start' }); }, 30); }
-    var title = { agenda: 'Agenda', anotacoes: 'Anotações', materiais: 'Materiais do Canvas' }[r[0]];
+    var title = { agenda: 'Agenda', anotacoes: 'Anotações', materiais: 'Materiais do Canvas', resumos: 'Resumos para provas', pdf: 'Baixar em PDF' }[r[0]];
     document.title = (title ? title + ' · ' : '') + 'Direito · Turma 2026';
   }
   window.addEventListener('hashchange', function () { render(); window.scrollTo(0, 0); });
 
   document.addEventListener('click', function (ev) {
-    var t = ev.target.closest('[data-act],[data-cal],[data-day],[data-go],[data-tema],[data-fc]'); if (!t) return;
+    var t = ev.target.closest('[data-pdf],[data-act],[data-cal],[data-day],[data-go],[data-tema],[data-fc]'); if (!t) return;
     var r = route(), sig = (r[1] || '').toUpperCase();
+    if (t.dataset.pdf) { makePDF(t.dataset.pdf, t.dataset.sig, t.dataset.id); return; }
     if (t.dataset.act === 'sair') { try { localStorage.removeItem('aj:key'); } catch (e) { } location.hash = ''; location.reload(); }
     else if (t.dataset.act === 'ics') ics();
     else if (t.dataset.act === 'copy') {
