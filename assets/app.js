@@ -48,6 +48,8 @@
   }
   function toast(msg) { var t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(function () { t.remove(); }, 2200); }
   /* Markdown próprio (sem dependências): títulos, listas, citações, tabelas, **negrito**, *itálico*, ==marca-texto==, links. */
+  var CALL = { conceito: 'Conceito', atencao: 'Atenção', dica: 'Dica de prova', lei: 'Na lei', exemplo: 'Exemplo', autor: 'Autor e obra', resumo: 'Em resumo', pergunta: 'Pergunta para pensar', citacao: 'Citação', obra: 'Resumo da obra' };
+  var ICO = { conceito: '◆', atencao: '!', dica: '★', lei: '§', exemplo: '→', autor: '✎', resumo: '≡', pergunta: '?', citacao: '❝', obra: '📖' };
   function inl(s) {
     return esc(s)
       .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
@@ -64,7 +66,7 @@
       var l = L[i];
       if (!l.trim()) { i++; continue; }
       var h = l.match(/^(#{1,6})\s+(.*)$/);
-      if (h) { var lv = Math.min(4, Math.max(3, h[1].length)); out.push('<h' + lv + '>' + inl(h[2]) + '</h' + lv + '>'); i++; continue; }
+      if (h) { var n = h[1].length; out.push(n <= 2 ? '<h3 class="h-big">' + inl(h[2]) + '</h3>' : n === 3 ? '<h3>' + inl(h[2]) + '</h3>' : '<h4>' + inl(h[2]) + '</h4>'); i++; continue; }
       if (/^\s*\|/.test(l) && L[i + 1] && /^\s*\|?\s*:?-{2,}/.test(L[i + 1])) {
         var head = cells(l), body = []; i += 2;
         while (i < L.length && /^\s*\|/.test(L[i])) { body.push(cells(L[i])); i++; }
@@ -72,7 +74,16 @@
           body.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + inl(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>');
         continue;
       }
-      if (/^>\s?/.test(l)) { var q = []; while (i < L.length && /^>\s?/.test(L[i])) { q.push(L[i].replace(/^>\s?/, '')); i++; } out.push('<blockquote><p>' + inl(q.join(' ')) + '</p></blockquote>'); continue; }
+      if (/^>\s?/.test(l)) {
+        var q = []; while (i < L.length && /^>\s?/.test(L[i])) { q.push(L[i].replace(/^>\s?/, '')); i++; }
+        var co = q[0].match(/^\[!(\w+)\]\s*(.*)$/);
+        if (co) {
+          var k = co[1].toLowerCase(), lab = CALL[k] || co[1];
+          q.shift();
+          out.push('<div class="callout co-' + esc(k) + '"><div class="co-h"><span class="co-i" aria-hidden="true">' + (ICO[k] || '•') + '</span>' + esc(lab) + (co[2] ? ': ' + inl(co[2]) : '') + '</div><div class="co-b">' + md(q.join('\n')) + '</div></div>');
+        } else out.push('<blockquote>' + md(q.join('\n')) + '</blockquote>');
+        continue;
+      }
       var lm = l.match(/^(\s*)([-*]|\d+\.)\s+/);
       if (lm) {
         var ord = /\d/.test(lm[2]), items = [];
@@ -507,62 +518,84 @@
   function pNotas(sig) {
     var N = S.notes[sig] || {}, notas = (N.anotacoes || []).slice().sort(function (a, b) { return a.ordem - b.ordem; });
     if (!notas.length) return '<p class="p-empty">Ainda sem anotações desta disciplina.</p>';
-    var h = '', u = null;
+    var h = '<section class="p-toc"><h2>Sumário</h2><ol>', u = null, k = 0;
+    notas.forEach(function (n) { if ((n.unidade || '') !== u) { if (u !== null) h += '</ol></li>'; u = n.unidade || ''; h += '<li class="p-toc-u"><b>' + esc(u || 'Geral') + '</b><ol>'; } k++; h += '<li>' + esc(n.titulo) + (n.subtitulo ? ' <span>· ' + esc(n.subtitulo) + '</span>' : '') + '</li>'; });
+    h += '</ol></li></ol></section>';
+    u = null; k = 0;
     notas.forEach(function (n) {
-      if ((n.unidade || '') !== u) { u = n.unidade || ''; if (u) h += '<h2 class="p-unit">' + esc(u) + '</h2>'; }
-      h += '<section class="p-note"><h3>' + esc(n.titulo) + '</h3>' + (n.subtitulo ? '<p class="p-sub">' + esc(n.subtitulo) + '</p>' : '') + '<div class="prose">' + md(n.conteudo_md) + '</div></section>';
+      if ((n.unidade || '') !== u) { u = n.unidade || ''; h += '<h2 class="p-unit">' + esc(u || 'Geral') + '</h2>'; }
+      k++;
+      h += '<section class="p-note"><header class="p-nh"><span class="p-num">' + k + '</span><div><h3>' + esc(n.titulo) + '</h3>' + (n.subtitulo ? '<p class="p-sub">' + esc(n.subtitulo) + '</p>' : '') + '</div></header><div class="prose">' + md(n.conteudo_md) + '</div></section>';
     });
     return h;
   }
   function pQuest(sig) {
     var qs = ((S.notes[sig] || {}).questoes || []).slice().sort(function (a, b) { return a.ordem - b.ordem; });
     if (!qs.length) return '<p class="p-empty">Ainda sem perguntas de revisão desta disciplina.</p>';
-    var h = '', t = null, i = 0;
-    qs.forEach(function (q) {
-      if ((q.tema || 'Geral') !== t) { t = q.tema || 'Geral'; h += '<h2 class="p-unit">' + esc(t) + '</h2>'; }
-      i++;
-      h += '<section class="p-q"><p class="p-qq"><b>' + i + '.</b> ' + esc(q.pergunta) + '</p><div class="p-ans prose">' + md(q.resposta_md) + '</div>' + (q.fonte ? '<p class="p-src">Fonte: ' + esc(q.fonte) + '</p>' : '') + '</section>';
+    var temas = []; qs.forEach(function (q) { var t = q.tema || 'Geral'; if (temas.indexOf(t) < 0) temas.push(t); });
+    var h = '<section class="p-howto"><b>Como usar:</b> responda às perguntas da Parte A sem consultar nada; depois confira na Parte B, que traz as respostas comentadas na mesma numeração.</section>';
+    h += '<h2 class="p-unit">Parte A · Perguntas</h2>';
+    var i = 0;
+    temas.forEach(function (t) {
+      h += '<h3 class="p-tema">' + esc(t) + '</h3><ol class="p-qlist" start="' + (i + 1) + '">';
+      qs.filter(function (q) { return (q.tema || 'Geral') === t; }).forEach(function (q) { i++; h += '<li>' + esc(q.pergunta) + '</li>'; });
+      h += '</ol>';
+    });
+    h += '<div class="p-break"></div><h2 class="p-unit">Parte B · Respostas comentadas</h2>';
+    i = 0;
+    temas.forEach(function (t) {
+      h += '<h3 class="p-tema">' + esc(t) + '</h3>';
+      qs.filter(function (q) { return (q.tema || 'Geral') === t; }).forEach(function (q) {
+        i++;
+        h += '<section class="p-q"><div class="p-qq"><span class="p-num">' + i + '</span><b>' + esc(q.pergunta) + '</b></div><div class="p-ans prose">' + md(q.resposta_md) + '</div>' + (q.fonte || q.ref ? '<p class="p-src">' + (q.ref ? 'Ver anotação: ' + esc(q.ref) : '') + (q.ref && q.fonte ? ' · ' : '') + (q.fonte ? 'Fonte: ' + esc(q.fonte) : '') + '</p>' : '') + '</section>';
+      });
     });
     return h;
   }
   function pResumo(r) {
     var dt = resDate(r), e = resEv(r);
-    return '<section class="p-res"><h2 class="p-unit">' + esc(r.titulo) + '</h2><p class="p-sub">' + (dt ? dmy(dt) : 'Data a definir') + (e && e.pontos ? ' · ' + esc(e.pontos) : '') + '</p>' +
-      (r.abrange && r.abrange.length ? '<div class="p-box"><b>O que cai</b><ul>' + r.abrange.map(function (a) { return '<li>' + inl(a) + '</li>'; }).join('') + '</ul></div>' : '') +
+    return '<section class="p-res"><header class="p-rh"><span class="p-eye">' + (r.tipo === 'global' ? 'Avaliação global' : 'Avaliação') + '</span><h2>' + esc(r.titulo) + '</h2><p>' + (dt ? dmy(dt) + ' (' + wd(dt) + ')' : 'Data a definir') + (e && e.pontos ? ' · ' + esc(e.pontos) : '') + '</p></header>' +
+      (r.abrange && r.abrange.length ? '<div class="callout co-resumo"><div class="co-h"><span class="co-i">≡</span>O que cai</div><div class="co-b"><ul>' + r.abrange.map(function (a) { return '<li>' + inl(a) + '</li>'; }).join('') + '</ul></div></div>' : '') +
       '<div class="prose">' + md(r.conteudo_md) + '</div></section>';
   }
   function pResumos(sig) {
     var L = resList().filter(function (r) { return r.disc === sig; }).sort(resSort);
-    return L.length ? L.map(pResumo).join('') : '<p class="p-empty">Ainda sem resumos de prova desta disciplina.</p>';
+    return L.length ? L.map(function (r, i) { return (i ? '<div class="p-break"></div>' : '') + pResumo(r); }).join('') : '<p class="p-empty">Ainda sem resumos de prova desta disciplina.</p>';
   }
-  var KIND = { notas: ['Anotações', pNotas], questoes: ['Questões de revisão', pQuest], resumos: ['Resumos para provas', pResumos] };
-  function printDoc(title, body) {
+  var KIND = { notas: ['Anotações das aulas', pNotas], questoes: ['Questões de revisão', pQuest], resumos: ['Resumos para provas', pResumos] };
+  function printDoc(title, body, running) {
     var root = document.getElementById('printroot');
     if (!root) { root = document.createElement('div'); root.id = 'printroot'; document.body.appendChild(root); }
     root.innerHTML = '<div class="pdoc">' + body + '<p class="p-foot">Direito · Turma PUC Minas · ' + esc(semInfo(S.sem).nome) + ' · gerado em ' + dmy(iso(today())) + '. Material de estudo da turma, feito a partir das aulas, do Canvas e dos grupos. Confira sempre com os professores.</p></div>';
+    var st = document.getElementById('pagestyle'); if (!st) { st = document.createElement('style'); st.id = 'pagestyle'; document.head.appendChild(st); }
+    st.textContent = '@page{@top-right{content:"' + String(running || title).replace(/["\\]/g, '') + '";font:8pt sans-serif;color:#888}@bottom-right{content:counter(page);font:8pt sans-serif;color:#888}}@page:first{@top-right{content:none}@bottom-right{content:none}}';
     var old = document.title; document.title = title.replace(/[\\/:*?"<>|]/g, '-');
     document.body.classList.add('printing');
     var done = function () { document.body.classList.remove('printing'); document.title = old; window.removeEventListener('afterprint', done); };
     window.addEventListener('afterprint', done);
-    setTimeout(function () { window.print(); setTimeout(done, 1500); }, 60);
+    setTimeout(function () { window.print(); setTimeout(done, 1500); }, 80);
   }
   function cover(t, sig, extra) {
-    var d = discInfo(sig), ld = lastDate(sig);
-    return '<header class="p-cover" style="--c:' + cvar(sig) + '"><span class="p-eye">' + esc(t) + '</span><h1>' + esc(d.nome || sig) + '</h1><p>' + esc(sig) + (d.professor ? ' · ' + esc(d.professor) : '') + '</p>' +
-      '<p class="p-upd">Conteúdo atualizado até ' + (ld ? dmy(ld) : '—') + (extra ? ' · ' + esc(extra) : '') + '</p></header>';
+    var d = discInfo(sig), ld = lastDate(sig), N = S.notes[sig] || {};
+    var nn = (N.anotacoes || []).length, nq = (N.questoes || []).length, nr = resList().filter(function (r) { return r.disc === sig; }).length;
+    return '<header class="p-cover" style="--c:' + cvar(sig) + '"><div class="p-band"><span>' + esc(sig) + '</span></div><span class="p-eye">' + esc(t) + '</span><h1>' + esc(d.nome || sig) + '</h1>' +
+      '<p class="p-prof">' + esc(d.professor || '') + '</p><dl class="p-facts"><div><dt>Semestre</dt><dd>' + esc(semInfo(S.sem).nome) + '</dd></div><div><dt>Atualizado até</dt><dd>' + (ld ? dmy(ld) : '—') + '</dd></div><div><dt>Conteúdo</dt><dd>' + nn + ' anotações · ' + nq + ' questões · ' + nr + ' resumos</dd></div></dl>' +
+      (extra ? '<p class="p-extra">' + esc(extra) + '</p>' : '') + '<p class="p-brand">Direito · Turma PUC Minas</p></header>';
   }
   function makePDF(kind, sig, id) {
     if (kind === 'resumo') {
       var r = resList().filter(function (x) { return x.id === id; })[0]; if (!r) return;
-      printDoc(r.disc + ' - ' + r.titulo, cover('Resumo para prova', r.disc) + pResumo(r)); return;
+      printDoc(r.disc + ' - ' + r.titulo, cover('Resumo para prova · ' + r.titulo, r.disc) + pResumo(r), r.disc + ' · ' + r.titulo); return;
     }
     var sigs = sig ? [sig] : ORDER.filter(function (s) { return kind === 'resumos' ? resList().some(function (r) { return r.disc === s; }) : (S.notes[s] && ((S.notes[s].anotacoes || []).length || (S.notes[s].questoes || []).length)); });
     var kinds = kind === 'tudo' ? ['resumos', 'notas', 'questoes'] : [kind];
     var body = sigs.map(function (s, i) {
-      return '<div class="p-disc' + (i ? ' p-break' : '') + '">' + kinds.map(function (k, j) { return (j ? '<div class="p-break"></div>' : '') + cover(KIND[k][0], s) + KIND[k][1](s); }).join('') + '</div>';
+      return '<div class="p-disc' + (i ? ' p-break' : '') + '">' + (kind === 'tudo' ? cover('Material completo: resumos, anotações e questões', s) : cover(KIND[kind][0], s)) +
+        kinds.map(function (k, j) { return (kind === 'tudo' ? '<div class="p-break"></div><h1 class="p-part" style="--c:' + cvar(s) + '">' + esc(KIND[k][0]) + '</h1>' : '') + KIND[k][1](s); }).join('') + '</div>';
     }).join('');
-    var name = (sig || 'Todas as disciplinas') + ' - ' + (kind === 'tudo' ? 'Material completo' : KIND[kind][0]) + ' - ' + dmy(iso(today())).replace(/\//g, '-');
-    printDoc(name, body || '<p>Nada para baixar ainda.</p>');
+    var label = kind === 'tudo' ? 'Material completo' : KIND[kind][0];
+    var name = (sig || 'Todas as disciplinas') + ' - ' + label + ' - ' + dmy(iso(today())).replace(/\//g, '-');
+    printDoc(name, body || '<p>Nada para baixar ainda.</p>', (sig ? discInfo(sig).nome : 'Todas as disciplinas') + ' · ' + label);
   }
   function vPDF() {
     var h = '<div class="page"><div class="head"><span class="eyebrow">Baixar em PDF</span><h1>Baixar em PDF</h1><hr class="rule"><p class="lead">Gere o PDF do que está publicado até a última atualização. Ao tocar no botão, abre a janela de impressão: escolha <b>Salvar como PDF</b> (no celular, use Compartilhar ou Imprimir → Salvar PDF).</p></div>';
