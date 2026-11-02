@@ -167,6 +167,7 @@
     S.notes = bundle.anotacoes || {};
     S.mat = bundle.materiais || null;
     S.res = bundle.resumos || null;
+    S.arq = bundle.arquivos || null;
     document.body.classList.remove('locked');
     var fu = document.getElementById('foot-upd');
     if (fu) fu.innerHTML = 'Agenda atualizada em ' + dmy(S.agenda.atualizadoEm) + '. <button class="linkbtn" data-act="sair">Sair deste aparelho</button>';
@@ -190,7 +191,7 @@
       var saved = LSget('key', null);
       if (!saved) return loginView();
       crypto.subtle.importKey('raw', b64(saved), { name: 'AES-GCM' }, true, ['decrypt'])
-        .then(function (k) { return open(k, pkg); })
+        .then(function (k) { S.key = k; return open(k, pkg); })
         .then(usar, function () { try { localStorage.removeItem('aj:key'); } catch (e) { } loginView('O acesso mudou. Entre de novo com a senha atual.'); });
     }).catch(function () {
       app.innerHTML = '<div class="page"><div class="card empty">Não foi possível carregar a agenda agora. Recarregue a página em instantes.</div></div>';
@@ -202,7 +203,7 @@
     var u = document.getElementById('lg-user').value, pw = document.getElementById('lg-pass').value, rem = document.getElementById('lg-rem').checked;
     var btn = document.getElementById('lg-btn'); btn.disabled = true; btn.textContent = 'Entrando…';
     var key;
-    derive(u, pw, PKG).then(function (k) { key = k; return open(k, PKG); }).then(function (bundle) {
+    derive(u, pw, PKG).then(function (k) { key = k; S.key = k; return open(k, PKG); }).then(function (bundle) {
       if (rem) crypto.subtle.exportKey('raw', key).then(function (raw) { LSset('key', toB64(raw)); });
       usar(bundle);
     }, function () { loginView('Usuário ou senha incorretos.'); });
@@ -270,7 +271,7 @@
   }
   function vMatDisc(sig) {
     var d = discInfo(sig), M = S.mat && S.mat.disciplinas && S.mat.disciplinas[sig];
-    return '<div class="page" style="--c:' + cvar(sig) + '"><div class="head dhead"><span class="eyebrow"><a href="#/materiais">Materiais do Canvas</a> · ' + esc(sig) + (d.professor ? ' · ' + esc(d.professor) : '') + '</span><h1>' + esc(d.nome || sig) + '</h1></div>' + matHTML(M) +
+    return '<div class="page" style="--c:' + cvar(sig) + '"><div class="head dhead"><span class="eyebrow"><a href="#/materiais">Materiais do Canvas</a> · ' + esc(sig) + (d.professor ? ' · ' + esc(d.professor) : '') + '</span><h1>' + esc(d.nome || sig) + '</h1></div>' + arqHTML(sig) + matHTML(M) +
       '<p class="muted" style="font-size:14px">Mesma disciplina em outros espaços: <a href="#/anotacoes/' + sig.toLowerCase() + '">Anotações</a> · <a href="#/agenda/disciplinas#' + sig + '">Datas na agenda</a></p></div>';
   }
 
@@ -396,6 +397,89 @@
       box.innerHTML = '<div class="card rows">' + (res.length ? res.slice(0, 40).map(function (r) { return '<a class="row" style="text-decoration:none;color:inherit;grid-template-columns:auto minmax(0,1fr)" href="' + r[3] + '">' + sigChip(r[0]) + '<div class="t"><b>' + esc(r[1]) + '</b>' + (r[2] ? '<p>…' + esc(r[2]) + '…</p>' : '') + '</div></a>'; }).join('') : '<div class="empty">Nada encontrado.</div>') + '</div>';
     });
   }
+  /* ---------- arquivos da turma (PDFs criptografados) ---------- */
+  function arqList(sig) { return ((S.arq && S.arq.arquivos) || []).filter(function (a) { return !sig || a.disc === sig; }); }
+  var ARQICO = { livro: '📘', leis: '§', pdf: '📄' };
+  function arqHTML(sig) {
+    var L = arqList(sig); if (!L.length) return '';
+    return '<section class="arqs"><h3>Arquivos da turma</h3><div class="arq-grid">' + L.map(function (a) {
+      return '<div class="card arq"><span class="arq-ico" aria-hidden="true">' + (ARQICO[a.tipo] || '📄') + '</span><div class="arq-b"><a class="arq-t" href="#/arquivo/' + esc(a.id) + '">' + esc(a.titulo) + '</a>' +
+        (a.descricao ? '<p>' + esc(a.descricao) + '</p>' : '') + '<small>PDF' + (a.paginas ? ' · ' + a.paginas + ' páginas' : '') + (a.data ? ' · enviado no grupo em ' + dm(a.data) : '') + '</small>' +
+        '<div class="arq-act"><a class="btn primary" href="#/arquivo/' + esc(a.id) + '">Abrir</a><button class="btn" data-arq="' + esc(a.id) + '">Baixar</button></div></div></div>';
+    }).join('') + '</div></section>';
+  }
+  S.blobs = {}; S.bufs = {};
+  function arqBuf(id) {
+    if (S.bufs[id]) return Promise.resolve(S.bufs[id]);
+    if (!S.key) return Promise.reject(new Error('sem chave'));
+    return fetch('data/arquivos/' + id + '.bin', { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error('http'); return r.arrayBuffer(); })
+      .then(function (buf) { return crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(buf, 0, 12) }, S.key, new Uint8Array(buf, 12)); })
+      .then(function (pt) { S.bufs[id] = pt; return pt; });
+  }
+  function arqBlob(id) {
+    if (S.blobs[id]) return Promise.resolve(S.blobs[id]);
+    return arqBuf(id).then(function (pt) { var u = URL.createObjectURL(new Blob([pt], { type: 'application/pdf' })); S.blobs[id] = u; return u; });
+  }
+  var PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  function pdfjs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    return new Promise(function (ok, no) {
+      var sc = document.createElement('script'); sc.src = PDFJS + 'pdf.min.js';
+      sc.onload = function () { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; ok(window.pdfjsLib); };
+      sc.onerror = no; document.head.appendChild(sc);
+    });
+  }
+  function arqRender(id, box) {
+    return Promise.all([pdfjs(), arqBuf(id)]).then(function (r) {
+      return r[0].getDocument({ data: new Uint8Array(r[1].slice(0)) }).promise;
+    }).then(function (doc) {
+      box.innerHTML = '<p class="muted arq-n">' + doc.numPages + ' páginas</p>';
+      var W = Math.min(box.clientWidth || 900, 900), dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var obs = 'IntersectionObserver' in window ? new IntersectionObserver(function (ents) {
+        ents.forEach(function (e) { if (e.isIntersecting) { obs.unobserve(e.target); draw(+e.target.dataset.p, e.target); } });
+      }, { rootMargin: '600px 0px' }) : null;
+      function draw(n, holder) {
+        doc.getPage(n).then(function (pg) {
+          var v1 = pg.getViewport({ scale: 1 }), sc = W / v1.width, vp = pg.getViewport({ scale: sc * dpr });
+          var c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height; c.style.width = '100%';
+          holder.innerHTML = ''; holder.style.aspectRatio = ''; holder.appendChild(c);
+          pg.render({ canvasContext: c.getContext('2d'), viewport: vp });
+        });
+      }
+      for (var i = 1; i <= doc.numPages; i++) {
+        var hd = document.createElement('div'); hd.className = 'arq-pg'; hd.dataset.p = i; hd.style.aspectRatio = '210 / 297';
+        box.appendChild(hd);
+        if (obs) obs.observe(hd); else draw(i, hd);
+      }
+    });
+  }
+  function arqInfo(id) { return arqList().filter(function (a) { return a.id === id; })[0]; }
+  function arqNome(a) { return a.titulo.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ') + '.pdf'; }
+  function arqBaixar(id) {
+    var a = arqInfo(id); if (!a) return;
+    toast('Preparando o arquivo…');
+    arqBlob(id).then(function (u) { var l = document.createElement('a'); l.href = u; l.download = arqNome(a); document.body.appendChild(l); l.click(); l.remove(); },
+      function () { toast('Não foi possível abrir o arquivo. Saia e entre de novo com a senha da turma.'); });
+  }
+  function vArquivo(id) {
+    var a = arqInfo(id);
+    if (!a) return '<div class="page"><div class="card empty">Arquivo não encontrado. <a href="#/">Voltar ao início</a></div></div>';
+    var back = '#/anotacoes/' + a.disc.toLowerCase();
+    setTimeout(function () {
+      var box = document.getElementById('arqv'); if (!box) return;
+      arqRender(id, box).catch(function () {
+        arqBlob(id).then(function (u) {
+          var b = document.getElementById('arqv'); if (b) b.innerHTML = '<iframe title="' + esc(a.titulo) + '" src="' + u + '"></iframe>';
+        }, function () { var b = document.getElementById('arqv'); if (b) b.innerHTML = '<div class="card empty">Não foi possível abrir o arquivo. Saia deste aparelho e entre de novo com a senha da turma.</div>'; });
+      });
+      arqBlob(id).then(function (u) { var nt = document.getElementById('arq-tab'); if (nt) { nt.href = u; nt.removeAttribute('aria-disabled'); } });
+    }, 0);
+    return '<div class="page arqpage" style="--c:' + cvar(a.disc) + '"><div class="head dhead"><span class="eyebrow"><a href="' + back + '">Anotações · ' + esc(a.disc) + '</a> · Arquivos da turma</span><h1>' + esc(a.titulo) + '</h1>' +
+      (a.descricao ? '<p class="lead">' + esc(a.descricao) + '</p>' : '') + '</div>' +
+      '<div class="bar"><button class="btn primary" data-arq="' + esc(a.id) + '">Baixar PDF</button><a class="btn" id="arq-tab" target="_blank" rel="noopener" aria-disabled="true">Abrir em tela cheia</a><a class="btn" href="' + back + '">Voltar às anotações</a></div>' +
+      '<div class="arqv" id="arqv"><div class="card empty">Abrindo o arquivo…</div></div>' +
+      '</div>';
+  }
   function vNotebook(sig, sub, arg) {
     var d = discInfo(sig), N = S.notes[sig];
     if (!N) { loadNotes(sig).then(render); return '<div class="page"><p class="muted">Carregando anotações…</p></div>'; }
@@ -408,6 +492,7 @@
       (d.descricao ? '<p class="lead">' + esc(d.descricao) + '</p>' : '') +
       (notas.length ? '<div class="prog"><span class="track"><i style="width:' + Math.round(nd / notas.length * 100) + '%"></i></span>' + nd + ' de ' + notas.length + ' revisadas</div>' : '') + '</div>';
     h += '<div class="bar"><button class="btn" data-pdf="notas" data-sig="' + sig + '">Anotações em PDF</button><button class="btn" data-pdf="questoes" data-sig="' + sig + '">Questões em PDF</button>' + (resList().some(function (r) { return r.disc === sig; }) ? '<a class="btn" href="#/resumos">Resumos para provas</a>' : '') + '</div>';
+    h += arqHTML(sig);
     var base = '#/anotacoes/' + sig.toLowerCase();
     h += '<div class="tabs" role="tablist">' + [['notas', 'Anotações', notas.length, base], ['revisao', 'Revisão', qs.length, base + '/revisao']].map(function (t) {
       return '<button role="tab" aria-selected="' + (tab === t[0]) + '" data-go="' + t[3] + '">' + t[1] + '<span class="n">' + t[2] + '</span></button>';
@@ -692,6 +777,7 @@
     else if (r[0] === 'resumos' && r[1]) h = vResumo(r[1]);
     else if (r[0] === 'resumos') h = vResHome();
     else if (r[0] === 'pdf') h = vPDF();
+    else if (r[0] === 'arquivo' && r[1]) h = vArquivo(r[1]);
     else h = vInicio();
     var focusId = document.activeElement && document.activeElement.id, pos = focusId && document.activeElement.selectionStart;
     app.innerHTML = h;
@@ -699,15 +785,16 @@
     if (r[0] === 'anotacoes' && !r[1] && S.q) searchNotes(S.q);
     if (r[2] === 'n' && r[3]) { var n = document.getElementById('n-' + r[3]); if (n) setTimeout(function () { n.scrollIntoView({ block: 'start' }); }, 30); }
     if (S.anchor) { var an = document.getElementById('d-' + S.anchor); if (an) setTimeout(function () { an.scrollIntoView({ block: 'start' }); }, 30); }
-    var title = { agenda: 'Agenda', anotacoes: 'Anotações', materiais: 'Materiais do Canvas', resumos: 'Resumos para provas', pdf: 'Baixar em PDF' }[r[0]];
+    var title = { arquivo: 'Arquivo da turma', agenda: 'Agenda', anotacoes: 'Anotações', materiais: 'Materiais do Canvas', resumos: 'Resumos para provas', pdf: 'Baixar em PDF' }[r[0]];
     document.title = (title ? title + ' · ' : '') + 'Direito · Turma PUC Minas';
   }
   window.addEventListener('hashchange', function () { render(); window.scrollTo(0, 0); });
 
   document.addEventListener('click', function (ev) {
-    var t = ev.target.closest('[data-sem],[data-pdf],[data-act],[data-cal],[data-day],[data-go],[data-tema],[data-fc]'); if (!t) return;
+    var t = ev.target.closest('[data-arq],[data-sem],[data-pdf],[data-act],[data-cal],[data-day],[data-go],[data-tema],[data-fc]'); if (!t) return;
     var r = route(), sig = (r[1] || '').toUpperCase();
     if (t.dataset.sem) { setSem(+t.dataset.sem); S.notes = S.notes; location.hash = '#/'; render(); return; }
+    if (t.dataset.arq) { arqBaixar(t.dataset.arq); return; }
     if (t.dataset.pdf) { makePDF(t.dataset.pdf, t.dataset.sig, t.dataset.id); return; }
     if (t.dataset.act === 'sair') { try { localStorage.removeItem('aj:key'); } catch (e) { } location.hash = ''; location.reload(); }
     else if (t.dataset.act === 'ics') ics();
