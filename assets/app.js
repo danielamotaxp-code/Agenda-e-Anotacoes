@@ -132,8 +132,10 @@
     var links = (e.arquivos || []).slice();
     if (e.canvas) links.unshift({ titulo: 'Abrir a tarefa no Canvas', url: e.canvas, canvas: 1 });
     if (links.length) h += '<div class="evd-files"><b>Arquivos e links</b>' + links.map(function (a) { return '<a target="_blank" rel="noopener" href="' + esc(a.url) + '">' + esc(a.titulo) + ' ↗</a>'; }).join('') + '</div>';
-    var rs = resList().filter(function (r) { return r.evento === e.id; })[0];
-    if (rs) h += '<div class="evd-files"><b>Para estudar</b><a href="#/resumos/' + esc(rs.id) + '">Resumo desta avaliação →</a><a href="#/anotacoes/' + e.disc.toLowerCase() + '/revisao">Questões de revisão →</a></div>';
+    var rsL = resList().filter(function (r) { return r.evento === e.id; }), pdL = arqList().filter(function (a) { return a.evento === e.id; });
+    if (rsL.length || pdL.length) h += '<div class="evd-files"><b>Para estudar</b>' + rsL.map(function (r, i) { return '<a href="#/resumos/' + esc(r.id) + '">' + (i ? esc(r.titulo) : 'Resumo desta avaliação') + ' →</a>'; }).join('') +
+      pdL.map(function (a) { return '<a href="#/arquivo/' + esc(a.id) + '">📝 ' + esc(a.titulo) + '</a>'; }).join('') +
+      '<a href="#/anotacoes/' + e.disc.toLowerCase() + '/revisao">Questões de revisão →</a></div>';
     return h + '</div>';
   }
   function rows(list, opts) { return list.length ? '<div class="card rows">' + list.map(function (e) { return rowHTML(e, opts); }).join('') + '</div>' : '<div class="card empty">Nada por aqui.</div>'; }
@@ -433,12 +435,12 @@
   }
   /* ---------- arquivos da turma (PDFs criptografados) ---------- */
   function arqList(sig) { return ((S.arq && S.arq.arquivos) || []).filter(function (a) { return !sig || a.disc === sig; }); }
-  var ARQICO = { livro: '📘', leis: '§', pdf: '📄' };
+  var ARQICO = { livro: '📘', leis: '§', pdf: '📄', resumo: '📝' };
   function arqHTML(sig) {
     var L = arqList(sig); if (!L.length) return '';
     return '<section class="arqs"><h3>Arquivos da turma</h3><div class="arq-grid">' + L.map(function (a) {
       return '<div class="card arq"><span class="arq-ico" aria-hidden="true">' + (ARQICO[a.tipo] || '📄') + '</span><div class="arq-b"><a class="arq-t" href="#/arquivo/' + esc(a.id) + '">' + esc(a.titulo) + '</a>' +
-        (a.descricao ? '<p>' + esc(a.descricao) + '</p>' : '') + '<small>PDF' + (a.paginas ? ' · ' + a.paginas + ' páginas' : '') + (a.data ? ' · enviado no grupo em ' + dm(a.data) : '') + '</small>' +
+        (a.descricao ? '<p>' + esc(a.descricao) + '</p>' : '') + '<small>PDF' + (a.paginas ? ' · ' + a.paginas + ' páginas' : '') + (a.data ? (a.tipo === 'resumo' ? ' · gerado em ' : ' · enviado no grupo em ') + dm(a.data) : '') + '</small>' +
         '<div class="arq-act"><a class="btn primary" href="#/arquivo/' + esc(a.id) + '">Abrir</a><button class="btn" data-arq="' + esc(a.id) + '">Baixar</button></div></div></div>';
     }).join('') + '</div></section>';
   }
@@ -492,13 +494,16 @@
   function arqBaixar(id) {
     var a = arqInfo(id); if (!a) return;
     toast('Preparando o arquivo…');
-    arqBlob(id).then(function (u) { var l = document.createElement('a'); l.href = u; l.download = arqNome(a); document.body.appendChild(l); l.click(); l.remove(); },
+    arqBlob(id).then(function (u) {
+      var l = document.createElement('a'); l.href = u; l.download = arqNome(a); document.body.appendChild(l); l.click(); l.remove();
+      toast('Se o download não começar, toque em "Ver o PDF" e use Compartilhar → Salvar em Arquivos.');
+    },
       function () { toast('Não foi possível abrir o arquivo. Saia e entre de novo com a senha da turma.'); });
   }
   function vArquivo(id) {
     var a = arqInfo(id);
     if (!a) return '<div class="page"><div class="card empty">Arquivo não encontrado. <a href="#/">Voltar ao início</a></div></div>';
-    var back = '#/anotacoes/' + a.disc.toLowerCase();
+    var back = a.resumo ? '#/resumos/' + a.resumo : '#/anotacoes/' + a.disc.toLowerCase();
     setTimeout(function () {
       var box = document.getElementById('arqv'); if (!box) return;
       arqRender(id, box).catch(function () {
@@ -510,7 +515,7 @@
     }, 0);
     return '<div class="page arqpage" style="--c:' + cvar(a.disc) + '"><div class="head dhead"><span class="eyebrow"><a href="' + back + '">Anotações · ' + esc(a.disc) + '</a> · Arquivos da turma</span><h1>' + esc(a.titulo) + '</h1>' +
       (a.descricao ? '<p class="lead">' + esc(a.descricao) + '</p>' : '') + '</div>' +
-      '<div class="bar"><button class="btn primary" data-arq="' + esc(a.id) + '">Baixar PDF</button><a class="btn" id="arq-tab" target="_blank" rel="noopener" aria-disabled="true">Abrir em tela cheia</a><a class="btn" href="' + back + '">Voltar às anotações</a></div>' +
+      '<div class="bar"><button class="btn primary" data-arq="' + esc(a.id) + '">Baixar PDF</button><a class="btn" id="arq-tab" target="_blank" rel="noopener" aria-disabled="true">Abrir em tela cheia</a><a class="btn" href="' + back + '">' + (a.resumo ? 'Voltar ao resumo' : 'Voltar às anotações') + '</a></div>' +
       '<div class="arqv" id="arqv"><div class="card empty">Abrindo o arquivo…</div></div>' +
       '</div>';
   }
@@ -621,7 +626,8 @@
     var e = resEv(r), dt = resDate(r), sig = r.disc;
     var h = '<div class="page" style="--c:' + cvar(sig) + '"><div class="head dhead"><span class="eyebrow"><a href="#/resumos">Resumos para provas</a> · ' + esc(sig) + '</span><h1>' + esc(r.titulo) + '</h1>' +
       '<p class="lead">' + esc(discInfo(sig).nome) + ' · ' + (dt ? dmy(dt) + ' (' + wd(dt) + ')' : 'data a definir') + (e && e.pontos ? ' · ' + esc(e.pontos) : '') + '</p></div>';
-    h += '<div class="bar"><button class="btn primary" data-pdf="resumo" data-id="' + esc(r.id) + '">Baixar este resumo em PDF</button><a class="btn" href="#/anotacoes/' + sig.toLowerCase() + '/revisao">Treinar com as perguntas</a><a class="btn" href="#/anotacoes/' + sig.toLowerCase() + '">Anotações completas</a></div>';
+    var rpdf = arqList().filter(function (a) { return a.resumo === r.id; })[0];
+    h += '<div class="bar">' + (rpdf ? '<button class="btn primary" data-arq="' + esc(rpdf.id) + '">Baixar PDF pronto</button><a class="btn" href="#/arquivo/' + esc(rpdf.id) + '">Ver o PDF</a><button class="btn" data-pdf="resumo" data-id="' + esc(r.id) + '">Imprimir</button>' : '<button class="btn primary" data-pdf="resumo" data-id="' + esc(r.id) + '">Baixar este resumo em PDF</button>') + '<a class="btn" href="#/anotacoes/' + sig.toLowerCase() + '/revisao">Treinar com as perguntas</a><a class="btn" href="#/anotacoes/' + sig.toLowerCase() + '">Anotações completas</a></div>';
     if (r.abrange && r.abrange.length) h += '<div class="card res-scope"><b>O que cai</b><ul>' + r.abrange.map(function (a) { return '<li>' + inl(a) + '</li>'; }).join('') + '</ul></div>';
     h += '<article class="card prose res-body">' + md(r.conteudo_md) + '</article>';
     return h + '<p class="muted" style="font-size:13px">Resumo atualizado em ' + dmy((r.atualizadoEm || (S.res && S.res.atualizadoEm) || '').slice(0, 10)) + (r.fonte ? ' · ' + esc(r.fonte) : '') + '</p></div>';
