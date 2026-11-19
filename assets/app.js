@@ -168,6 +168,7 @@
     S.mat = bundle.materiais || null;
     S.res = bundle.resumos || null;
     S.arq = bundle.arquivos || null;
+    S.pc = bundle.calendario || null;
     document.body.classList.remove('locked');
     var fu = document.getElementById('foot-upd');
     if (fu) fu.innerHTML = 'Agenda atualizada em ' + dmy(S.agenda.atualizadoEm) + '. <button class="linkbtn" data-act="sair">Sair deste aparelho</button>';
@@ -224,6 +225,35 @@
     return h;
   }
 
+  /* ---------- calendário PUC Minas ---------- */
+  var PCT = { feriado: 'Feriado / sem aula', recesso: 'Recesso dos professores', letivo: 'Início e fim de semestre, prazos', evento: 'Evento da PUC' };
+  function pcList() { return (S.pc && S.pc.eventos) || []; }
+  function pcOn(dI) { return pcList().filter(function (e) { return dI >= e.data && dI <= (e.fim || e.data); }); }
+  function pcData(e) { return e.fim ? dm(e.data) + ' a ' + dm(e.fim) : dm(e.data); }
+  function pcBanner() {
+    if (!S.pc) return '';
+    var tI = iso(today());
+    var prox = pcList().filter(function (e) { return (e.fim || e.data) >= tI && e.tipo !== 'recesso'; }).slice(0, 4);
+    return '<a class="card pc-banner" href="#/puc"><div><span class="eyebrow">Em destaque</span><h2>' + esc(S.pc.titulo) + '</h2><p>Feriados, recessos, início e fim de semestre.</p></div><ul>' +
+      (prox.length ? prox.map(function (e) { return '<li class="pc-' + e.tipo + '"><b>' + pcData(e) + '</b> ' + esc(e.titulo) + '</li>'; }).join('') : '<li>Calendário do ano encerrado.</li>') +
+      '</ul><span class="go">Ver o calendário do ano →</span></a>';
+  }
+  function vPuc() {
+    if (!S.pc) return '<div class="page"><div class="card empty">Calendário ainda não publicado.</div></div>';
+    var tI = iso(today()), byM = {};
+    pcList().forEach(function (e) { var m = +e.data.slice(5, 7) - 1; (byM[m] = byM[m] || []).push(e); });
+    var h = '<div class="page"><div class="head"><span class="eyebrow">PUC Minas · ' + S.pc.ano + '</span><h1>Calendário acadêmico</h1><hr class="rule"><p class="lead">' + esc(S.pc.obs || '') + '</p>' +
+      '<div class="bar"><a class="btn primary" href="' + esc(S.pc.fonte) + '" target="_blank" rel="noopener">Abrir o PDF oficial da PUC</a><a class="btn" href="' + esc(S.pc.pagina) + '" target="_blank" rel="noopener">Página do calendário</a></div></div>';
+    h += '<div class="legend pc-legend">' + Object.keys(PCT).map(function (k) { return '<span class="pc-' + k + '"><i></i>' + PCT[k] + '</span>'; }).join('') + '</div>';
+    h += '<div class="pc-grid">';
+    for (var m = 0; m < 12; m++) {
+      var L = byM[m] || [];
+      h += '<section class="card pc-mes' + ((S.pc.ano + '-' + String(m + 1).padStart(2, '0')) === tI.slice(0, 7) ? ' atual' : '') + '"><h3>' + MESES[m].charAt(0).toUpperCase() + MESES[m].slice(1) + '</h3><ul>' +
+        (L.length ? L.map(function (e) { var past = (e.fim || e.data) < tI; return '<li class="pc-' + e.tipo + (past ? ' past' : '') + '"><b>' + pcData(e) + '</b><span>' + esc(e.titulo) + '</span></li>'; }).join('') : '<li class="vazio">Sem datas especiais.</li>') + '</ul></section>';
+    }
+    return h + '</div></div>';
+  }
+
   /* ---------- início: os três espaços ---------- */
   function countMat(sig) {
     var M = S.mat && S.mat.disciplinas && S.mat.disciplinas[sig];
@@ -235,6 +265,7 @@
     ORDER.forEach(function (s) { var d = discInfo(s); nNotas += d.notas || 0; nPerg += d.perguntas || 0; nMat += countMat(s); });
     var h = '<div class="page"><div class="head"><span class="eyebrow">Turma de Direito · PUC Minas</span><h1>Direito</h1><hr class="rule"><p class="lead">Hoje é ' + WD[t.getDay()] + ', ' + dmy(iso(t)) + '. Escolha o semestre e um dos espaços.</p></div>' + semBar();
     if (!ORDER.length) return h + '<div class="card empty sem-empty"><h2>' + esc(semInfo(S.sem).nome) + '</h2><p>Este semestre ainda não começou. Quando as disciplinas chegarem, vamos programar juntos a agenda, as anotações, os resumos e os materiais deste semestre.</p><button class="btn primary" data-sem="' + (semList().filter(function (x) { return x.status === 'atual'; })[0] || { id: 1 }).id + '">Voltar ao semestre atual</button></div></div>';
+    h += pcBanner();
     h += '<div class="spaces">';
     h += '<a class="card space sp-agenda" href="#/agenda"><span class="eyebrow">Espaço 1</span><h2>Agenda</h2><p>Calendário, provas, trabalhos, avaliações globais e avisos para o WhatsApp.</p><ul>' +
       (next.length ? next.map(function (e) { return '<li><b>' + dm(e.data) + '</b> ' + esc(e.disc) + ' · ' + esc(e.titulo) + '</li>'; }).join('') : '<li>Nenhum prazo próximo.</li>') + '</ul><span class="go">Abrir a agenda →</span></a>';
@@ -291,7 +322,9 @@
       for (var d = 0; d < 7; d++) {
         var day = addD(ws, d), dI = iso(day);
         var cls = 'day' + (day.getMonth() !== m ? ' out' : '') + (dI === tISO ? ' today' : '') + (S.calSel === dI ? ' sel' : '');
-        var inner = '<span class="n">' + day.getDate() + '</span>';
+        var pcs = pcOn(dI).filter(function (e) { return e.tipo === 'feriado'; });
+        if (pcs.length) cls += ' hol';
+        var inner = '<span class="n">' + day.getDate() + '</span>' + pcs.map(function (e) { return '<div class="pcev" title="' + esc(e.titulo) + '">' + esc(e.titulo) + '</div>'; }).join('');
         multi.forEach(function (e) {
           if (dI < e.data || dI > e.fim) { inner += '<div class="band ghost" style="--c:transparent;background:transparent">.</div>'; return; }
           var st = dI === e.data, en = dI === e.fim, showT = st || d === 0;
@@ -304,10 +337,11 @@
       }
     }
     h += '</div></div>';
-    h += '<div class="legend">' + ORDER.map(function (s) { return '<span><i class="sig" style="--c:' + cvar(s) + ';min-width:0;padding:0;width:10px;height:10px;border-radius:50%"></i>' + s + '</span>'; }).join('') + '<span>○ prevista / a confirmar</span><span>faixa = período de vários dias</span></div>';
+    h += '<div class="legend">' + ORDER.map(function (s) { return '<span><i class="sig" style="--c:' + cvar(s) + ';min-width:0;padding:0;width:10px;height:10px;border-radius:50%"></i>' + s + '</span>'; }).join('') + (S.pc ? '<span><i style="display:inline-block;width:10px;height:10px;background:#C0392B;border-radius:2px;margin-right:4px"></i>feriado / recesso da PUC</span>' : '') + '<span>○ prevista / a confirmar</span><span>faixa = período de vários dias</span></div>';
     if (S.calSel) {
       var sel = E.filter(function (e) { return S.calSel >= e.data && S.calSel <= endOf(e); }).sort(byDate);
-      h += '<section><h2>' + WD[pd(S.calSel).getDay()] + ', ' + dmy(S.calSel) + '</h2>' + rows(sel) + '</section>';
+      var pcd = pcOn(S.calSel);
+      h += '<section><h2>' + WD[pd(S.calSel).getDay()] + ', ' + dmy(S.calSel) + '</h2>' + (pcd.length ? '<div class="pc-dia">' + pcd.map(function (e) { return '<p class="pc-' + e.tipo + '"><b>PUC Minas:</b> ' + esc(e.titulo) + '</p>'; }).join('') + '</div>' : '') + rows(sel) + '</section>';
     } else h += '<p class="muted">Clique num dia para ver os detalhes.</p>';
     return h + '</div>';
   }
@@ -777,6 +811,7 @@
     else if (r[0] === 'resumos' && r[1]) h = vResumo(r[1]);
     else if (r[0] === 'resumos') h = vResHome();
     else if (r[0] === 'pdf') h = vPDF();
+    else if (r[0] === 'puc') h = vPuc();
     else if (r[0] === 'arquivo' && r[1]) h = vArquivo(r[1]);
     else h = vInicio();
     var focusId = document.activeElement && document.activeElement.id, pos = focusId && document.activeElement.selectionStart;
@@ -785,7 +820,7 @@
     if (r[0] === 'anotacoes' && !r[1] && S.q) searchNotes(S.q);
     if (r[2] === 'n' && r[3]) { var n = document.getElementById('n-' + r[3]); if (n) setTimeout(function () { n.scrollIntoView({ block: 'start' }); }, 30); }
     if (S.anchor) { var an = document.getElementById('d-' + S.anchor); if (an) setTimeout(function () { an.scrollIntoView({ block: 'start' }); }, 30); }
-    var title = { arquivo: 'Arquivo da turma', agenda: 'Agenda', anotacoes: 'Anotações', materiais: 'Materiais do Canvas', resumos: 'Resumos para provas', pdf: 'Baixar em PDF' }[r[0]];
+    var title = { arquivo: 'Arquivo da turma', agenda: 'Agenda', anotacoes: 'Anotações', materiais: 'Materiais do Canvas', resumos: 'Resumos para provas', pdf: 'Baixar em PDF', puc: 'Calendário PUC Minas' }[r[0]];
     document.title = (title ? title + ' · ' : '') + 'Direito · Turma PUC Minas';
   }
   window.addEventListener('hashchange', function () { render(); window.scrollTo(0, 0); });

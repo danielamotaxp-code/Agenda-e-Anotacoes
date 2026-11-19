@@ -359,3 +359,26 @@ body.locked .nav{display:none}
 .arq-pg { background: #fff; border: 1px solid var(--line, #e5e1d8); border-radius: 6px; margin: 0 0 14px; box-shadow: 0 1px 3px rgba(0,0,0,.06); overflow: hidden; width: 100%; }
 .arq-pg canvas { display: block; }
 .arq-n { font-size: 13px; margin: 0 0 8px; }
+
+/* calendário PUC Minas */
+.pc-banner{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:18px;align-items:center;padding:20px 22px;margin:0 0 16px;text-decoration:none;color:inherit;border-left:6px solid var(--hot);background:linear-gradient(90deg,var(--hot-bg),var(--paper) 55%)}
+.pc-banner h2{font-size:26px;margin:2px 0 4px}.pc-banner p{margin:0;color:var(--muted)}
+.pc-banner ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.pc-banner b{font:500 13px var(--f-mono);margin-right:6px}
+.pc-banner .go{grid-column:1/-1;font-weight:600;color:var(--hot)}
+@media (max-width:760px){.pc-banner{grid-template-columns:minmax(0,1fr)}}
+.pc-feriado{--pc:#C0392B}.pc-recesso{--pc:#8A5A06}.pc-letivo{--pc:var(--navy)}.pc-evento{--pc:#2E6B45}
+.pc-banner li,.pc-mes li{border-left:3px solid var(--pc,var(--line));padding-left:8px}
+.pc-legend span{display:inline-flex;align-items:center;gap:6px}.pc-legend i{width:10px;height:10px;border-radius:2px;background:var(--pc)}
+.pc-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:14px}
+@media (max-width:900px){.pc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:600px){.pc-grid{grid-template-columns:minmax(0,1fr)}}
+.pc-mes{padding:14px 16px}.pc-mes.atual{box-shadow:inset 0 0 0 2px var(--gold)}
+.pc-mes h3{margin:0 0 8px;font-family:var(--f-head);font-size:22px;color:var(--navy)}
+.pc-mes ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px;font-size:14px}
+.pc-mes li b{display:block;font:500 12.5px var(--f-mono);color:var(--pc)}
+.pc-mes li.past{opacity:.5}.pc-mes li.vazio{border:0;padding:0;color:var(--muted)}
+.day.hol{background:#FBECEA}.day.hol.out{background:#F6EEEC}
+.pcev{position:absolute;top:10px;left:34px;right:6px;font-size:11px;font-weight:600;color:#A93226;line-height:1.2;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+@media (max-width:640px){.pcev{display:none}}
+.pc-dia p{margin:0 0 8px;padding:8px 10px;border-left:4px solid var(--pc);background:var(--paper);border-radius:6px}
