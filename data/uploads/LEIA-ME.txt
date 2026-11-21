@@ -1,0 +1,3 @@
+Pasta dos arquivos adicionados pela página "Meus arquivos" do site.
+Cada arquivo f-....bin está embaralhado com a senha da turma; o nome também.
+Não renomeie os arquivos.

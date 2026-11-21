@@ -20,6 +20,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validar JSON
         run: python3 -m json.tool data/conteudo.json > /dev/null
+      - name: Listar arquivos enviados
+        run: |
+          mkdir -p data/uploads
+          (cd data/uploads && ls -1 | grep -E '^f-.+\.bin$' || true) > data/uploads/index.txt
       - uses: actions/configure-pages@v5
         with:
           enablement: true
