@@ -133,8 +133,10 @@
     if (e.canvas) links.unshift({ titulo: 'Abrir a tarefa no Canvas', url: e.canvas, canvas: 1 });
     if (links.length) h += '<div class="evd-files"><b>Arquivos e links</b>' + links.map(function (a) { return '<a target="_blank" rel="noopener" href="' + esc(a.url) + '">' + esc(a.titulo) + ' ↗</a>'; }).join('') + '</div>';
     var rsL = resList().filter(function (r) { return r.evento === e.id; }), pdL = arqList().filter(function (a) { return a.evento === e.id; });
+    var fL = pdL.filter(function (a) { return a.tipo !== 'resumo'; });
+    if (fL.length) h += '<div class="evd-arqs"><b>Arquivos desta atividade</b><div class="card mats">' + fL.map(function (a) { return arqRow(a); }).join('') + '</div></div>';
     if (rsL.length || pdL.length) h += '<div class="evd-files"><b>Para estudar</b>' + rsL.map(function (r, i) { return '<a href="#/resumos/' + esc(r.id) + '">' + (i ? esc(r.titulo) : 'Resumo desta avaliação') + ' →</a>'; }).join('') +
-      pdL.map(function (a) { return '<a href="#/arquivo/' + esc(a.id) + '">📝 ' + esc(a.titulo) + '</a>'; }).join('') +
+      pdL.filter(function (a) { return a.tipo === 'resumo'; }).map(function (a) { return '<a href="#/arquivo/' + esc(a.id) + '">📝 ' + esc(a.titulo) + '</a>'; }).join('') +
       '<a href="#/anotacoes/' + e.disc.toLowerCase() + '/revisao">Questões de revisão →</a></div>';
     return h + '</div>';
   }
@@ -275,8 +277,9 @@
     var R = resList().slice().sort(resSort).filter(function (r) { var d = resDate(r); return d && pd(d) >= today(); }).slice(0, 3);
     h += '<a class="card space sp-res" href="#/resumos"><span class="eyebrow">Espaço 3</span><h2>Resumos para provas</h2><p>Um resumo por avaliação e os resumos do ano para as globais.</p><ul>' +
       (R.length ? R.map(function (r) { return '<li><b>' + dm(resDate(r)) + '</b> ' + esc(r.disc) + ' · ' + esc(r.titulo) + '</li>'; }).join('') : '<li>' + resList().length + ' resumos</li>') + '</ul><span class="go">Abrir os resumos →</span></a>';
-    h += '<a class="card space sp-mat" href="#/materiais"><span class="eyebrow">Espaço 4</span><h2>Materiais do Canvas</h2><p>Textos, slides, videoaulas e tarefas de cada disciplina, com link direto para o Canvas.</p><ul><li><b>' + nMat + '</b> itens em ' + ORDER.length + ' disciplinas</li>' + (S.mat ? '<li>Atualizado em ' + dmy(S.mat.atualizadoEm) + '</li>' : '') + '</ul><span class="go">Abrir os materiais →</span></a>';
-    h += '<a class="card space sp-pdf" href="#/pdf"><span class="eyebrow">Espaço 5</span><h2>Baixar em PDF</h2><p>Anotações, questões e resumos de cada disciplina em PDF, atualizados até a última data publicada.</p><ul><li><b>' + nPerg + '</b> questões · <b>' + resList().length + '</b> resumos</li></ul><span class="go">Gerar PDF →</span></a>';
+    h += '<a class="card space sp-mat" href="#/materiais"><span class="eyebrow">Espaço 4</span><h2>Materiais do Canvas</h2><p>Os módulos de cada disciplina com os arquivos para abrir e baixar aqui; vídeos e tarefas abrem no Canvas.</p><ul><li><b>' + nMat + '</b> itens em ' + ORDER.length + ' disciplinas</li>' + (S.mat ? '<li>Atualizado em ' + dmy(S.mat.atualizadoEm) + '</li>' : '') + '</ul><span class="go">Abrir os materiais →</span></a>';
+    h += '<a class="card space sp-mat" href="#/biblioteca"><span class="eyebrow">Espaço 5</span><h2>Biblioteca</h2><p>Todos os textos, livros e slides da turma em um só lugar, com busca.</p><ul><li><b>' + arqList().length + '</b> arquivos para baixar</li></ul><span class="go">Abrir a biblioteca →</span></a>';
+    h += '<a class="card space sp-pdf" href="#/pdf"><span class="eyebrow">Espaço 6</span><h2>Baixar em PDF</h2><p>Anotações, questões e resumos de cada disciplina em PDF, atualizados até a última data publicada.</p><ul><li><b>' + nPerg + '</b> questões · <b>' + resList().length + '</b> resumos</li></ul><span class="go">Gerar PDF →</span></a>';
     return h + '</div></div>';
   }
   function semBar() {
@@ -436,13 +439,47 @@
   /* ---------- arquivos da turma (PDFs criptografados) ---------- */
   function arqList(sig) { return ((S.arq && S.arq.arquivos) || []).filter(function (a) { return !sig || a.disc === sig; }); }
   var ARQICO = { livro: '📘', leis: '§', pdf: '📄', resumo: '📝' };
-  function arqHTML(sig) {
-    var L = arqList(sig); if (!L.length) return '';
-    return '<section class="arqs"><h3>Arquivos da turma</h3><div class="arq-grid">' + L.map(function (a) {
+  var PAPEL = { texto: 'Texto', ed: 'Estudo dirigido', slides: 'Slides', livro: 'Livro', plano: 'Plano de ensino', atividade: 'Atividade', lei: 'Lei e documento', anotacao: 'Anotações de aula', apostila: 'Apostila', unidade: 'Unidade digital', tarefa: 'Orientações', resumo: 'Resumo', leis: 'Artigos citados' };
+  function arqRow(a, tag) {
+    var p = a.papel || (a.tipo === 'resumo' ? 'resumo' : a.tipo === 'leis' ? 'leis' : a.tipo === 'livro' ? 'livro' : 'texto');
+    return '<div class="mat mat-local"><span class="pp pp-' + p + '">' + esc(PAPEL[p] || 'Arquivo') + '</span><span class="mat-n"><a href="#/arquivo/' + esc(a.id) + '">' + esc(a.titulo) + '</a>' + (a.autor ? '<small class="au">' + esc(a.autor) + '</small>' : '') + '<small class="mt">' + (a.paginas ? a.paginas + ' p.' : 'PDF') + (tag ? ' · ' + tag : '') + '</small></span><span class="mat-act"><a class="btn sm" href="#/arquivo/' + esc(a.id) + '">Abrir</a><button class="btn sm primary" data-arq="' + esc(a.id) + '">Baixar</button></span></div>';
+  }
+  var ARQGRP = [['resumo', 'Resumos e provas resolvidas'], ['leis', 'Artigos e leis citados'], ['livro', 'Livros'], ['material', 'Outros arquivos da disciplina']];
+  function arqGroup(a) { return a.tipo === 'resumo' || a.tipo === 'leis' || a.tipo === 'livro' ? a.tipo : 'material'; }
+  function arqRows(L) {
+    return '<div class="card mats">' + L.map(function (a) { return arqRow(a, a.modulo ? esc(a.modulo) : ''); }).join('') + '</div>';
+  }
+  function arqHTML(sig, all) {
+    var L = arqList(sig).filter(function (a) { return all || !a.linked; }); if (!L.length) return '';
+    var h = '<section class="arqs">';
+    ARQGRP.forEach(function (g) { var G = L.filter(function (a) { return arqGroup(a) === g[0]; }); if (G.length) h += '<h3>' + g[1] + '</h3>' + arqRows(G); });
+    return h + '</section>';
+  }
+  function arqCards(L) {
+    return '<div class="arq-grid">' + L.map(function (a) {
       return '<div class="card arq"><span class="arq-ico" aria-hidden="true">' + (ARQICO[a.tipo] || '📄') + '</span><div class="arq-b"><a class="arq-t" href="#/arquivo/' + esc(a.id) + '">' + esc(a.titulo) + '</a>' +
         (a.descricao ? '<p>' + esc(a.descricao) + '</p>' : '') + '<small>PDF' + (a.paginas ? ' · ' + a.paginas + ' páginas' : '') + (a.data ? (a.tipo === 'resumo' ? ' · gerado em ' : ' · enviado no grupo em ') + dm(a.data) : '') + '</small>' +
         '<div class="arq-act"><a class="btn primary" href="#/arquivo/' + esc(a.id) + '">Abrir</a><button class="btn" data-arq="' + esc(a.id) + '">Baixar</button></div></div></div>';
-    }).join('') + '</div></section>';
+    }).join('') + '</div>';
+  }
+  /* ---------- biblioteca: todos os arquivos ---------- */
+  var BQ = { q: '', d: '' };
+  function vBiblioteca() {
+    var L = arqList().filter(function (a) { return ORDER.indexOf(a.disc) >= 0; });
+    var h = '<div class="page"><div class="head"><span class="eyebrow">Biblioteca da turma</span><h1>Biblioteca</h1><hr class="rule"><p class="lead">Todos os textos, livros, slides e atividades do Canvas e dos grupos da turma, para abrir e baixar aqui mesmo. ' + L.length + ' arquivos.</p></div>';
+    h += '<div class="bar"><input id="bq" class="inp" type="search" placeholder="Buscar por título ou autor" value="' + esc(BQ.q) + '" style="flex:1;min-width:0"></div>';
+    h += '<div class="chips" style="margin-bottom:14px"><button class="chip" data-bd="" aria-pressed="' + (!BQ.d) + '">Todas</button>' + ORDER.map(function (s) { return '<button class="chip" data-bd="' + s + '" aria-pressed="' + (BQ.d === s) + '">' + esc(s) + '</button>'; }).join('') + '</div><div id="blist">' + bibList(L) + '</div>';
+    var X = (S.arq && S.arq.livros_externos) || [];
+    if (X.length) h += '<section class="unit"><h3>Livros para conseguir na biblioteca ou na livraria</h3><p class="muted" style="font-size:14px;margin-top:-4px">Estes livros circularam nos grupos, mas são obras protegidas por direito autoral e não ficam disponíveis para download aqui. Procure na Biblioteca da PUC Minas, na Minha Biblioteca (biblioteca virtual da PUC) ou em livrarias.</p><div class="card mats">' + X.filter(function (x) { return ORDER.indexOf(x.disc) >= 0; }).map(function (x) { return '<div class="mat mat-local"><span class="pp pp-livro">' + esc(x.disc) + '</span><span class="mat-n"><b>' + esc(x.titulo) + '</b><small class="au">' + esc(x.autor) + '</small>' + (x.obs ? '<small class="mt">' + esc(x.obs) + '</small>' : '') + '</span><span></span></div>'; }).join('') + '</div></section>';
+    return h + '</div>';
+  }
+  function bibList(L) {
+    var q = BQ.q.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    var F = L.filter(function (a) { return (!BQ.d || a.disc === BQ.d) && (!q || (a.titulo + ' ' + (a.descricao || '') + ' ' + (a.modulo || '')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').indexOf(q) >= 0); });
+    if (!F.length) return '<div class="card empty">Nenhum arquivo encontrado.</div>';
+    var h = '';
+    ORDER.forEach(function (s) { var G = F.filter(function (a) { return a.disc === s; }); if (!G.length) return; h += '<section class="unit" style="--c:' + cvar(s) + '"><h3>' + sigChip(s) + ' ' + esc(discInfo(s).nome || s) + ' <small class="muted">· ' + G.length + '</small></h3>' + arqRows(G) + '</section>'; });
+    return h;
   }
   S.blobs = {}; S.bufs = {};
   function arqBuf(id) {
@@ -454,7 +491,7 @@
   }
   function arqBlob(id) {
     if (S.blobs[id]) return Promise.resolve(S.blobs[id]);
-    return arqBuf(id).then(function (pt) { var u = URL.createObjectURL(new Blob([pt], { type: 'application/pdf' })); S.blobs[id] = u; return u; });
+    return arqBuf(id).then(function (pt) { var a = arqInfo(id) || {}; var u = URL.createObjectURL(new Blob([pt], { type: a.mime || 'application/pdf' })); S.blobs[id] = u; return u; });
   }
   var PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
   function pdfjs() {
@@ -490,7 +527,7 @@
     });
   }
   function arqInfo(id) { return arqList().filter(function (a) { return a.id === id; })[0]; }
-  function arqNome(a) { return a.titulo.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ') + '.pdf'; }
+  function arqNome(a) { return a.titulo.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ') + '.' + (a.ext || 'pdf'); }
   function arqBaixar(id) {
     var a = arqInfo(id); if (!a) return;
     toast('Preparando o arquivo…');
@@ -503,7 +540,7 @@
   function vArquivo(id) {
     var a = arqInfo(id);
     if (!a) return '<div class="page"><div class="card empty">Arquivo não encontrado. <a href="#/">Voltar ao início</a></div></div>';
-    var back = a.resumo ? '#/resumos/' + a.resumo : '#/anotacoes/' + a.disc.toLowerCase();
+    var back = a.resumo ? '#/resumos/' + a.resumo : (a.origem ? '#/materiais/' + a.disc.toLowerCase() : '#/anotacoes/' + a.disc.toLowerCase());
     setTimeout(function () {
       var box = document.getElementById('arqv'); if (!box) return;
       arqRender(id, box).catch(function () {
@@ -515,7 +552,7 @@
     }, 0);
     return '<div class="page arqpage" style="--c:' + cvar(a.disc) + '"><div class="head dhead"><span class="eyebrow"><a href="' + back + '">Anotações · ' + esc(a.disc) + '</a> · Arquivos da turma</span><h1>' + esc(a.titulo) + '</h1>' +
       (a.descricao ? '<p class="lead">' + esc(a.descricao) + '</p>' : '') + '</div>' +
-      '<div class="bar"><button class="btn primary" data-arq="' + esc(a.id) + '">Baixar PDF</button><a class="btn" id="arq-tab" target="_blank" rel="noopener" aria-disabled="true">Abrir em tela cheia</a><a class="btn" href="' + back + '">' + (a.resumo ? 'Voltar ao resumo' : 'Voltar às anotações') + '</a></div>' +
+      '<div class="bar"><button class="btn primary" data-arq="' + esc(a.id) + '">Baixar PDF</button><a class="btn" id="arq-tab" target="_blank" rel="noopener" aria-disabled="true">Abrir em tela cheia</a><a class="btn" href="' + back + '">' + (a.resumo ? 'Voltar ao resumo' : a.origem ? 'Voltar aos materiais' : 'Voltar às anotações') + '</a></div>' +
       '<div class="arqv" id="arqv"><div class="card empty">Abrindo o arquivo…</div></div>' +
       '</div>';
   }
@@ -558,15 +595,23 @@
   function matHTML(M) {
     if (!M || !M.modulos.length) return '<div class="card empty">Nenhum material encontrado no Canvas desta disciplina.</div>';
     var base = (S.mat && S.mat.base) || 'https://pucminas.instructure.com';
-    var h = '<div class="bar" style="justify-content:space-between"><p class="muted" style="margin:0;font-size:14px">Os links abrem no Canvas da PUC. Se você não estiver logado, o Canvas mostra primeiro a tela de login com a sua conta da PUC. Lista atualizada em ' + dmy(S.mat.atualizadoEm) + '.</p>' +
+    var h = '<div class="bar" style="justify-content:space-between"><p class="muted" style="margin:0;font-size:14px">Arquivos com <b>Abrir</b> e <b>Baixar</b> ficam aqui na plataforma. Os itens com ↗ (vídeos, links e tarefas) abrem no Canvas. Atualizado em ' + dmy(S.mat.atualizadoEm) + '.</p>' +
       '<span class="bar" style="margin:0"><a class="btn" target="_blank" rel="noopener" href="' + esc(base + '/login') + '">Entrar no Canvas ↗</a><a class="btn" target="_blank" rel="noopener" href="' + esc(base + '/courses/' + M.curso) + '">Abrir disciplina no Canvas ↗</a></span></div>';
     M.modulos.forEach(function (m) {
       if (!m.itens.length) return;
       h += '<section class="unit"><h3>' + esc(m.nome) + '</h3><div class="card mats">';
+      var MA = m.arq && arqInfo(m.arq);
+      if (MA) h += '<div class="mat mat-local mat-unit"><span class="pp pp-unidade">Unidade digital</span><span class="mat-n"><a href="#/arquivo/' + esc(MA.id) + '"><b>Conteúdo completo da unidade</b></a><small class="mt">' + m.itens.filter(function (x) { return x.tipo === 'P'; }).length + ' páginas do Canvas em um PDF' + (MA.paginas ? ' · ' + MA.paginas + ' p.' : '') + '</small></span><span class="mat-act"><a class="btn sm" href="#/arquivo/' + esc(MA.id) + '">Abrir</a><button class="btn sm primary" data-arq="' + esc(MA.id) + '">Baixar</button></span></div>';
+      var others = m.itens.filter(function (x) { return !(x.arq && arqInfo(x.arq)) && !(x.tipo === 'P' && m.arq) && x.tipo !== 'H'; });
+      var needHdr = others.length && m.itens.some(function (x) { return x.arq; });
       m.itens.forEach(function (it) {
         if (it.tipo === 'H') { h += '<div class="mat-h">' + esc(it.titulo) + '</div>'; return; }
         var e = it.tipo === 'F' ? ext(it.titulo) : '';
         var title = e ? it.titulo.replace(/\.[a-z0-9]{2,4}$/i, '') : it.titulo;
+        var A = it.arq && arqInfo(it.arq);
+        if (A) { h += arqRow(A, A.origem === 'whatsapp' ? 'enviado no grupo' : ''); return; }
+        if (it.tipo === 'P' && m.arq) return;
+        if (needHdr) { h += '<div class="mat-h">No Canvas (vídeos, links e atividades)</div>'; needHdr = false; }
         h += '<a class="mat" target="_blank" rel="noopener" href="' + esc(base + it.url) + '"><span class="mat-t mat-' + it.tipo + '">' + esc(e || TIPO[it.tipo] || 'Item') + '</span><span class="mat-n">' + esc(title) + '</span><span class="mat-go" aria-hidden="true">↗</span></a>';
       });
       h += '</div></section>';
@@ -818,6 +863,7 @@
     else if (r[0] === 'resumos') h = vResHome();
     else if (r[0] === 'pdf') h = vPDF();
     else if (r[0] === 'puc') h = vPuc();
+    else if (r[0] === 'biblioteca') h = vBiblioteca();
     else if (r[0] === 'arquivo' && r[1]) h = vArquivo(r[1]);
     else h = vInicio();
     var focusId = document.activeElement && document.activeElement.id, pos = focusId && document.activeElement.selectionStart;
@@ -826,12 +872,13 @@
     if (r[0] === 'anotacoes' && !r[1] && S.q) searchNotes(S.q);
     if (r[2] === 'n' && r[3]) { var n = document.getElementById('n-' + r[3]); if (n) setTimeout(function () { n.scrollIntoView({ block: 'start' }); }, 30); }
     if (S.anchor) { var an = document.getElementById('d-' + S.anchor); if (an) setTimeout(function () { an.scrollIntoView({ block: 'start' }); }, 30); }
-    var title = { arquivo: 'Arquivo da turma', agenda: 'Agenda', anotacoes: 'Anotações', materiais: 'Materiais do Canvas', resumos: 'Resumos para provas', pdf: 'Baixar em PDF', puc: 'Calendário PUC Minas' }[r[0]];
+    var title = { arquivo: 'Arquivo da turma', agenda: 'Agenda', anotacoes: 'Anotações', materiais: 'Materiais do Canvas', resumos: 'Resumos para provas', pdf: 'Baixar em PDF', puc: 'Calendário PUC Minas', biblioteca: 'Biblioteca' }[r[0]];
     document.title = (title ? title + ' · ' : '') + 'Direito · Turma PUC Minas';
   }
   window.addEventListener('hashchange', function () { render(); window.scrollTo(0, 0); });
 
   document.addEventListener('click', function (ev) {
+    var bd = ev.target.closest('[data-bd]'); if (bd) { BQ.d = bd.dataset.bd; render(); return; }
     var t = ev.target.closest('[data-arq],[data-sem],[data-pdf],[data-act],[data-cal],[data-day],[data-go],[data-tema],[data-fc]'); if (!t) return;
     var r = route(), sig = (r[1] || '').toUpperCase();
     if (t.dataset.sem) { setSem(+t.dataset.sem); S.notes = S.notes; location.hash = '#/'; render(); return; }
@@ -870,6 +917,7 @@
   document.addEventListener('input', function (ev) {
     var id = ev.target.id;
     if (id === 'f-q') { clearTimeout(qt); qt = setTimeout(function () { F.q = ev.target.value; render(); }, 150); }
+    if (id === 'bq') { clearTimeout(qt); qt = setTimeout(function () { BQ.q = ev.target.value; var b = document.getElementById('blist'); if (b) b.innerHTML = bibList(arqList().filter(function (a) { return ORDER.indexOf(a.disc) >= 0; })); }, 150); }
     if (id === 'nq') { clearTimeout(qt); qt = setTimeout(function () { S.q = ev.target.value; searchNotes(S.q); }, 200); }
   });
   document.addEventListener('change', function (ev) {

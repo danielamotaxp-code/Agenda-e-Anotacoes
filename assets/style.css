@@ -382,3 +382,20 @@ body.locked .nav{display:none}
 .pcev{position:absolute;top:10px;left:34px;right:6px;font-size:11px;font-weight:600;color:#A93226;line-height:1.2;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 @media (max-width:640px){.pcev{display:none}}
 .pc-dia p{margin:0 0 8px;padding:8px 10px;border-left:4px solid var(--pc);background:var(--paper);border-radius:6px}
+
+/* materiais e biblioteca: arquivos locais */
+.mat.mat-local{grid-template-columns:88px minmax(0,1fr) auto}
+.mat-local .mat-n{color:var(--ink);text-decoration:none}.mat-local .mat-n:hover{text-decoration:underline}
+.mat-act{display:flex;gap:6px}.btn.sm{padding:5px 10px;font-size:13px;min-height:0}
+.mat-unit{background:var(--paper)}
+.inp{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card,#fff);color:var(--ink)}
+@media (max-width:640px){.mat-act{justify-content:flex-start}}
+.pp{display:inline-block;font:600 11px/1.2 var(--f-mono,monospace);text-transform:uppercase;letter-spacing:.04em;padding:5px 7px;border-radius:6px;background:var(--pp,#eef1f5);color:var(--ppc,#2b3a4a);text-align:center}
+.pp-texto{--pp:#E8F0FA;--ppc:#1D4F8C}.pp-ed{--pp:#FDF1DC;--ppc:#8A5A06}.pp-slides{--pp:#F1E9F7;--ppc:#6A3D8F}.pp-livro{--pp:#E6F3EA;--ppc:#2E6B45}
+.pp-plano,.pp-tarefa{--pp:#F3EDE4;--ppc:#6B4F2A}.pp-atividade{--pp:#FBE9E7;--ppc:#A93226}.pp-lei,.pp-leis{--pp:#EAEAF4;--ppc:#33356B}.pp-anotacao{--pp:#EEF3F3;--ppc:#2F5F63}
+.pp-apostila{--pp:#E6F3EA;--ppc:#2E6B45}.pp-unidade{--pp:#E3F1F7;--ppc:#155B78}.pp-resumo{--pp:#F7E6EC;--ppc:#5B1A2E}
+.mat-local .mat-n{display:flex;flex-direction:column;gap:2px}.mat-local .mat-n a{color:var(--ink);text-decoration:none;font-weight:500}.mat-local .mat-n a:hover{text-decoration:underline}
+.mat-n .au{color:var(--muted);font-size:13px}.mat-n .mt{color:var(--muted);font-size:12px}
+.mat.mat-local{grid-template-columns:120px minmax(0,1fr) auto}
+.evd-arqs{margin:14px 0}.evd-arqs>b{display:block;margin-bottom:6px}
+@media (max-width:640px){.mat.mat-local{grid-template-columns:minmax(0,1fr)}.mat-local .pp{justify-self:start}}
