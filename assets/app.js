@@ -560,6 +560,16 @@
         '<div class="arq-act"><a class="btn primary" href="#/arquivo/' + esc(a.id) + '">Abrir</a><button class="btn" data-arq="' + esc(a.id) + '">Baixar</button></div></div></div>';
     }).join('') + '</div>';
   }
+  /* ---------- livro protegido: aviso + onde achar + resumo ---------- */
+  function bookCard(x) {
+    var R = x.resumo && resList().filter(function (r) { return r.id === x.resumo; })[0];
+    var A = x.arq && arqInfo(x.arq);
+    var h = '<div class="mat mat-local mat-book book"><span class="pp pp-livro">' + (x.disc ? esc(x.disc) : 'Livro') + '</span><span class="mat-n"><b>' + esc(x.titulo) + '</b>' + (x.autor ? '<small class="au">' + esc(x.autor) + '</small>' : '') + (x.obs ? '<small class="mt">' + esc(x.obs) + '</small>' : '');
+    h += '<span class="book-aviso"><b>Por que o livro não está aqui?</b> O PDF que circulou nos grupos é, muito provavelmente, uma cópia pirata de uma obra protegida por direito autoral, então ele não é hospedado na plataforma.</span>';
+    h += '<span class="book-onde"><b>Onde acessar:</b> ' + esc(x.onde || 'Biblioteca da PUC Minas, Minha Biblioteca ou livrarias.') + (x.canvas ? ' <a href="' + esc(x.canvas) + '" target="_blank" rel="noopener">Abrir no Canvas ↗</a>' : '') + '</span>';
+    if (R || A) h += '<span class="book-res"><b>Apesar disso, aqui vem um resumo do livro:</b><br>' + (R ? '<a class="btn sm primary" href="#/resumos/' + esc(R.id) + '">Ler o resumo</a> ' : '') + (A ? '<button class="btn sm" data-arq="' + esc(A.id) + '">Baixar resumo (PDF)</button>' : '') + '</span>';
+    return h + '</span><span></span></div>';
+  }
   /* ---------- biblioteca: todos os arquivos ---------- */
   var BQ = { q: '', d: '' };
   function vBiblioteca() {
@@ -568,7 +578,7 @@
     h += '<div class="bar"><input id="bq" class="inp" type="search" placeholder="Buscar por título ou autor" value="' + esc(BQ.q) + '" style="flex:1;min-width:0"></div>';
     h += '<div class="chips" style="margin-bottom:14px"><button class="chip" data-bd="" aria-pressed="' + (!BQ.d) + '">Todas</button>' + ORDER.map(function (s) { return '<button class="chip" data-bd="' + s + '" aria-pressed="' + (BQ.d === s) + '">' + esc(s) + '</button>'; }).join('') + '</div><div id="blist">' + bibList(L) + '</div>';
     var X = (S.arq && S.arq.livros_externos) || [];
-    if (X.length) h += '<section class="unit"><h3>Livros para conseguir na biblioteca ou na livraria</h3><p class="muted" style="font-size:14px;margin-top:-4px">Estes livros circularam nos grupos, mas são obras protegidas por direito autoral e não ficam disponíveis para download aqui. Procure na Biblioteca da PUC Minas, na Minha Biblioteca (biblioteca virtual da PUC) ou em livrarias.</p><div class="card mats">' + X.filter(function (x) { return ORDER.indexOf(x.disc) >= 0; }).map(function (x) { return '<div class="mat mat-local"><span class="pp pp-livro">' + esc(x.disc) + '</span><span class="mat-n"><b>' + esc(x.titulo) + '</b><small class="au">' + esc(x.autor) + '</small>' + (x.obs ? '<small class="mt">' + esc(x.obs) + '</small>' : '') + '</span><span></span></div>'; }).join('') + '</div></section>';
+    if (X.length) h += '<section class="unit"><h3>Livros: aviso e resumo</h3><p class="muted" style="font-size:14px;margin-top:-4px">Os PDFs destes livros que circularam nos grupos são, muito provavelmente, cópias piratas de obras protegidas por direito autoral, por isso não ficam para download aqui. Cada livro diz onde está o original e traz um resumo feito para a turma.</p><div class="card mats">' + X.filter(function (x) { return ORDER.indexOf(x.disc) >= 0; }).map(bookCard).join('') + '</div></section>';
     return h + '</div>';
   }
   function bibList(L) {
@@ -706,10 +716,10 @@
         if (it.tipo === 'H') { h += '<div class="mat-h">' + esc(it.titulo) + '</div>'; return; }
         var e = it.tipo === 'F' ? ext(it.titulo) : '';
         var title = e ? it.titulo.replace(/\.[a-z0-9]{2,4}$/i, '') : it.titulo;
+        if (it.tipo === 'B') { h += bookCard({ titulo: it.titulo, autor: it.info, onde: it.onde, canvas: it.canvas, resumo: it.resumo, arq: it.arq }); return; }
         var A = it.arq && arqInfo(it.arq);
         if (A) { h += arqRow(A, A.origem === 'whatsapp' ? 'enviado no grupo' : ''); return; }
         if (it.tipo === 'P' && m.arq) return;
-        if (it.tipo === 'B') { h += '<div class="mat mat-local mat-book"><span class="pp pp-livro">Livro</span><span class="mat-n"><b>' + esc(it.titulo) + '</b><small class="au">' + esc(it.info || '') + '</small><small class="mt">Livro protegido por direito autoral: não fica para download aqui. Procure na Biblioteca da PUC ou na Minha Biblioteca.</small></span><span></span></div>'; return; }
         if (needHdr) { h += '<div class="mat-h">No Canvas (vídeos, links e atividades)</div>'; needHdr = false; }
         h += '<a class="mat" target="_blank" rel="noopener" href="' + esc(base + it.url) + '"><span class="mat-t mat-' + it.tipo + '">' + esc(e || TIPO[it.tipo] || 'Item') + '</span><span class="mat-n">' + esc(title) + '</span><span class="mat-go" aria-hidden="true">↗</span></a>';
       });
@@ -770,8 +780,8 @@
     var e = resEv(r), dt = resDate(r), sig = r.disc;
     var h = '<div class="page" style="--c:' + cvar(sig) + '"><div class="head dhead"><span class="eyebrow"><a href="#/resumos">Resumos para provas</a> · ' + esc(sig) + '</span><h1>' + esc(r.titulo) + '</h1>' +
       '<p class="lead">' + esc(discInfo(sig).nome) + ' · ' + (dt ? dmy(dt) + ' (' + wd(dt) + ')' : 'data a definir') + (e && e.pontos ? ' · ' + esc(e.pontos) : '') + '</p></div>';
-    var rpdf = arqList().filter(function (a) { return a.resumo === r.id; })[0];
-    h += '<div class="bar">' + (rpdf ? '<button class="btn primary" data-arq="' + esc(rpdf.id) + '">Baixar PDF pronto</button><a class="btn" href="#/arquivo/' + esc(rpdf.id) + '">Ver o PDF</a><button class="btn" data-pdf="resumo" data-id="' + esc(r.id) + '">Imprimir</button>' : '<button class="btn primary" data-pdf="resumo" data-id="' + esc(r.id) + '">Baixar este resumo em PDF</button>') + '<a class="btn" href="#/anotacoes/' + sig.toLowerCase() + '/revisao">Treinar com as perguntas</a><a class="btn" href="#/anotacoes/' + sig.toLowerCase() + '">Anotações completas</a></div>';
+    var rpdfs = arqList().filter(function (a) { return a.resumo === r.id; }), rpdf = rpdfs[0];
+    h += '<div class="bar">' + (rpdfs.length > 1 ? rpdfs.map(function (a) { return '<button class="btn primary" data-arq="' + esc(a.id) + '">Baixar: ' + esc(a.titulo.replace(/ \(PDF\)$/, '')) + '</button>'; }).join('') + '<button class="btn" data-pdf="resumo" data-id="' + esc(r.id) + '">Imprimir tudo</button>' : rpdf ? '<button class="btn primary" data-arq="' + esc(rpdf.id) + '">Baixar PDF pronto</button><a class="btn" href="#/arquivo/' + esc(rpdf.id) + '">Ver o PDF</a><button class="btn" data-pdf="resumo" data-id="' + esc(r.id) + '">Imprimir</button>' : '<button class="btn primary" data-pdf="resumo" data-id="' + esc(r.id) + '">Baixar este resumo em PDF</button>') + '<a class="btn" href="#/anotacoes/' + sig.toLowerCase() + '/revisao">Treinar com as perguntas</a><a class="btn" href="#/anotacoes/' + sig.toLowerCase() + '">Anotações completas</a></div>';
     if (r.abrange && r.abrange.length) h += '<div class="card res-scope"><b>O que cai</b><ul>' + r.abrange.map(function (a) { return '<li>' + inl(a) + '</li>'; }).join('') + '</ul></div>';
     h += '<article class="card prose res-body">' + md(r.conteudo_md) + '</article>';
     return h + '<p class="muted" style="font-size:13px">Resumo atualizado em ' + dmy((r.atualizadoEm || (S.res && S.res.atualizadoEm) || '').slice(0, 10)) + (r.fonte ? ' · ' + esc(r.fonte) : '') + '</p></div>';
