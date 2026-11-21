@@ -315,16 +315,16 @@
   }
   function edSend(o, msg) {
     var m = document.getElementById('ed-msg'); if (m) m.textContent = 'Preparando…';
-    var w = window.open('about:blank', '_blank');
     sealOp(o).then(function (c) {
       var body = 'Edição criptografada da agenda (não edite este texto).\n\n```\nAGENDA-EDIT-v1\n' + c + '\n```';
       var url = 'https://github.com/' + GHPUB + '/issues/new?title=' + encodeURIComponent('Edição da agenda') + '&body=' + encodeURIComponent(body);
-      if (url.length > 7800) { if (w) w.close(); if (m) m.textContent = 'O texto ficou longo demais para enviar de uma vez. Encurte as orientações e tente de novo.'; return; }
-      if (w) w.location = url; else location.href = url;
+      if (url.length > 7800) { if (m) m.textContent = 'O texto ficou longo demais para enviar de uma vez. Encurte as orientações e tente de novo.'; return; }
       var P = pendList(); P.push(o); LSset('pend', P); applyOp(S.agenda.eventos, o);
-      toast('Agora clique em Create na aba do GitHub.'); location.hash = '#/agenda/editar';
-    }, function () { if (w) w.close(); if (m) m.textContent = 'Não foi possível preparar a edição. Saia e entre de novo no site com a senha da turma.'; });
+      var f = document.getElementById('ed-form');
+      f.innerHTML = '<h3>Falta só um clique</h3><p>A alteração está pronta. Toque no botão abaixo: abre o GitHub com tudo preenchido. Lá, clique em <b>Create</b> (ou "Submit new issue"). Em cerca de 2 minutos aparece no site para a turma.</p><div class="bar"><a class="btn primary" id="ed-go" target="_blank" rel="noopener" href="' + esc(url) + '">Abrir o GitHub e publicar</a><a class="btn" href="#/agenda/editar">Voltar à lista</a></div><p class="muted" style="font-size:13px">Neste aparelho a mudança já aparece. Se o GitHub pedir login, entre na sua conta (a dona do site).</p>';
+    }, function () { if (m) m.textContent = 'Não foi possível preparar a edição. Saia e entre de novo no site com a senha da turma.'; });
   }
+
 
 
   /* ---------- calendário PUC Minas ---------- */
