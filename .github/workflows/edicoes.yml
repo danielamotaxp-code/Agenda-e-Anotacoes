@@ -1,0 +1,46 @@
+name: Edições da agenda
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: write
+  issues: write
+  actions: write
+concurrency:
+  group: edicoes
+  cancel-in-progress: false
+jobs:
+  aplicar:
+    if: github.event.issue.user.login == github.repository_owner && startsWith(github.event.issue.title, 'Edição da agenda')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guardar a edição (criptografada)
+        env:
+          BODY: ${{ github.event.issue.body }}
+          NUM: ${{ github.event.issue.number }}
+        run: |
+          python3 - <<'PY'
+          import os, re, json, base64
+          m = re.search(r'AGENDA-EDIT-v1\s+([A-Za-z0-9+/=]+)', os.environ['BODY'] or '')
+          if not m: raise SystemExit('sem edição no texto')
+          c = m.group(1); raw = base64.b64decode(c, validate=True)
+          if len(raw) < 30 or len(raw) > 8000: raise SystemExit('tamanho inválido')
+          p = 'data/edicoes.json'; d = json.load(open(p))
+          n = int(os.environ['NUM'])
+          if not any(o['n'] == n for o in d['ops']): d['ops'].append({'n': n, 'c': c})
+          json.dump(d, open(p, 'w'), separators=(',', ':'))
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/edicoes.json
+          git commit -m "Edição da agenda #${{ github.event.issue.number }}" || exit 0
+          git pull --rebase -q && git push
+      - name: Publicar o site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo ${{ github.repository }}
+      - name: Fechar a issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue close ${{ github.event.issue.number }} --repo ${{ github.repository }} --comment "Edição publicada. Aparece no site em cerca de 1 minuto." 
