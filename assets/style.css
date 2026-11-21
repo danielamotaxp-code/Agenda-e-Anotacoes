@@ -399,3 +399,14 @@ body.locked .nav{display:none}
 .mat.mat-local{grid-template-columns:120px minmax(0,1fr) auto}
 .evd-arqs{margin:14px 0}.evd-arqs>b{display:block;margin-bottom:6px}
 @media (max-width:640px){.mat.mat-local{grid-template-columns:minmax(0,1fr)}.mat-local .pp{justify-self:start}}
+/* editor da agenda */
+.ed-form h3{margin:0 0 12px}.ed-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
+.ed-grid label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--muted)}
+.ed-grid label.full{grid-column:1/-1}.ed-grid select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card,#fff);color:var(--ink)}
+.ed-grid .inp{font-weight:400}.ed-grid textarea{resize:vertical;font-family:inherit}
+.ed-form{padding:18px}.ed-setup{padding:18px}.ed-setup ol{padding-left:20px;line-height:1.7}.ed-pend{padding:12px 16px;border-left:4px solid var(--gold,#b8892f);margin-bottom:12px}
+.ed-row{grid-template-columns:60px minmax(0,1fr) auto}.ed-row .mat-n{display:flex;flex-direction:column}.ed-row .mt{color:var(--muted);font-size:12px}
+.linkbtn{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;cursor:pointer;font:inherit}
+.ed-msg{min-height:1.2em;font-size:14px}
+@media (max-width:640px){.ed-grid{grid-template-columns:minmax(0,1fr)}}
+.mat-book{background:var(--paper)}

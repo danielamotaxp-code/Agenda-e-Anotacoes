@@ -127,6 +127,7 @@
       '<span><b>Data:</b> ' + (e.data ? dmy(e.data) + ' (' + wd(e.data) + ')' + (e.fim ? ' a ' + dmy(e.fim) : '') : 'a definir') + '</span>' +
       '<span><b>Valor:</b> ' + (e.pontos ? esc(e.pontos) : 'não informado') + '</span>' +
       '<span><b>Situação:</b> ' + esc(STATUS[e.status] || e.status) + '</span></div>';
+    if (ghTok()) h += '<p style="margin:0 0 8px"><a class="btn sm" href="#/agenda/editar/' + esc(e.id) + '">✎ Editar este item</a></p>';
     if (e.descricao_md) h += '<div class="prose">' + md(e.descricao_md) + '</div>';
     else h += '<p class="muted">Sem orientações publicadas ainda. ' + (e.detalhes ? esc(e.detalhes) : '') + '</p>';
     var links = (e.arquivos || []).slice();
@@ -164,7 +165,7 @@
       .then(function (pt) { return JSON.parse(new TextDecoder().decode(pt)); });
   }
   function usar(bundle) {
-    S.agenda = bundle.agenda; S.disc = (bundle.disciplinas && bundle.disciplinas.disciplinas) || [];
+    S.agenda = bundle.agenda; applyPending(); S.disc = (bundle.disciplinas && bundle.disciplinas.disciplinas) || [];
     S.allDisc = S.disc; S.sems = (bundle.disciplinas && bundle.disciplinas.semestres) || null;
     var cur = semList().filter(function (x) { return x.status === 'atual'; })[0];
     setSem(LSget('sem', cur ? cur.id : 1));
@@ -229,6 +230,108 @@
     return h;
   }
 
+  /* ---------- editor da agenda (grava no repositório privado via GitHub) ---------- */
+  var GH = { repo: 'danielamotaxp-code/agenda-dados', path: 'data/agenda.json' };
+  var TIPOS = [['prova', 'Prova'], ['atividade', 'Atividade'], ['entrega', 'Entrega'], ['seminario', 'Seminário'], ['apresentacao', 'Apresentação'], ['visita', 'Visita'], ['global', 'Avaliação global'], ['reavaliacao', 'Reavaliação'], ['publicacao', 'Publicação']];
+  var EDF = ['id', 'disc', 'tipo', 'status', 'secao', 'titulo', 'detalhes', 'pontos', 'data', 'fim', 'grupo', 'vinculo', 'descricao_md', 'arquivos', 'canvas'];
+  function ghTok() { try { return localStorage.getItem('aj:gh') || ''; } catch (e) { return ''; } }
+  function pyj(v) {
+    if (v === null || v === undefined) return 'null';
+    if (Array.isArray(v)) return '[' + v.map(pyj).join(', ') + ']';
+    if (typeof v === 'object') return '{' + Object.keys(v).map(function (k) { return JSON.stringify(k) + ': ' + pyj(v[k]); }).join(', ') + '}';
+    return JSON.stringify(v);
+  }
+  function b64e(str) { var u = new TextEncoder().encode(str), s = ''; for (var i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192)); return btoa(s); }
+  function b64d(b) { var s = atob(b.replace(/\n/g, '')), u = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new TextDecoder().decode(u); }
+  function ghReq(method, body) {
+    return fetch('https://api.github.com/repos/' + GH.repo + '/contents/' + GH.path + (method === 'GET' ? '?ref=main&t=' + Date.now() : ''), {
+      method: method, headers: { 'Authorization': 'Bearer ' + ghTok(), 'Accept': 'application/vnd.github+json' }, body: body ? JSON.stringify(body) : undefined, cache: 'no-store'
+    }).then(function (r) { if (!r.ok) return r.json().catch(function () { return {}; }).then(function (j) { var e = new Error(j.message || ('HTTP ' + r.status)); e.status = r.status; throw e; }); return r.json(); });
+  }
+  // aplica op sobre lista de eventos: {op:'set'|'del', ev}
+  function applyOp(list, o) {
+    var i = list.findIndex ? list.findIndex(function (e) { return e.id === (o.ev ? o.ev.id : o.id); }) : -1;
+    if (o.op === 'del') { if (i >= 0) list.splice(i, 1); return; }
+    if (i >= 0) list[i] = o.ev; else list.push(o.ev);
+  }
+  function ghSave(o, msg) {
+    return ghReq('GET').then(function (f) {
+      var txt = b64d(f.content), lines = txt.split('\n'), head = lines[0], evsL = [];
+      lines.slice(1).forEach(function (l) { var t = l.trim(); if (t.indexOf('{"id"') === 0) evsL.push(JSON.parse(t.replace(/,$/, ''))); });
+      applyOp(evsL, o);
+      var d = iso(today());
+      head = head.replace(/"atualizadoEm":"[^"]*"/, '"atualizadoEm":"' + d + '"');
+      var out = head + '\n' + evsL.map(function (e) { var x = {}; Object.keys(e).forEach(function (k) { x[k] = e[k]; }); EDF.forEach(function (k) { if (!(k in x)) x[k] = k === 'arquivos' ? [] : null; }); return pyj(x); }).join(',\n') + '\n]}\n';
+      JSON.parse(out);
+      return ghReq('PUT', { message: msg, content: b64e(out), sha: f.sha, branch: 'main' });
+    });
+  }
+  function pendList() { var P = LSget('pend', []), now = Date.now(); return P.filter(function (p) { return now - p.ts < 20 * 60000; }); }
+  function applyPending() { if (!S.agenda) return; var P = pendList(); LSset('pend', P); P.forEach(function (p) { applyOp(S.agenda.eventos, p); }); }
+  function slug(s) { return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30); }
+  function opt(list, v) { return list.map(function (x) { return '<option value="' + esc(x[0]) + '"' + (x[0] === v ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join(''); }
+  function vEditor(id) {
+    var h = '<div class="page"><div class="head"><span class="eyebrow">Agenda · editar</span><h1>Editar a agenda</h1><hr class="rule"><p class="lead">Crie itens novos ou corrija os existentes (por exemplo, trocar "data a definir" pela data certa). As mudanças vão para o site de todos em cerca de 2 minutos.</p></div>';
+    if (!ghTok()) {
+      return h + '<div class="card ed-setup"><h3>Ativar a edição neste aparelho</h3><p>Para editar, o site precisa de uma <b>chave de edição</b> do GitHub (um token pessoal), que fica guardada só neste navegador. Quem não tem a chave continua só vendo a agenda.</p>' +
+        '<ol><li>Abra <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new ↗</a> (logada na sua conta).</li><li><b>Token name:</b> Agenda da turma. <b>Expiration:</b> a maior data permitida.</li><li><b>Repository access:</b> "Only select repositories" → marque <b>agenda-dados</b> e <b>Agenda-e-Anotacoes</b>.</li><li><b>Permissions → Repository permissions → Contents:</b> "Read and write".</li><li>Clique em <b>Generate token</b>, copie o código (começa com <code>github_pat_</code>) e cole abaixo.</li></ol>' +
+        '<div class="bar"><input id="gh-tok" class="inp" type="password" autocomplete="off" placeholder="Cole aqui a chave de edição" style="flex:1;min-width:0"><button class="btn primary" data-ed="tok">Salvar chave</button></div><p class="muted" style="font-size:13px">A chave não aparece para mais ninguém e não é enviada para o site: ela só é usada pelo seu navegador para gravar no GitHub. Para apagar, use "Remover a chave deste aparelho" na tela de edição.</p></div></div>';
+    }
+    if (id) return h + edForm(id === 'novo' ? null : evs().filter(function (e) { return e.id === id; })[0]) + '</div>';
+    var P = pendList();
+    if (P.length) h += '<div class="card ed-pend"><b>Publicando…</b> ' + P.length + ' alteração(ões) enviada(s) nos últimos minutos. Já aparecem aqui para você; para a turma, aparecem em cerca de 2 minutos.</div>';
+    h += '<div class="bar"><a class="btn primary" href="#/agenda/editar/novo">+ Novo item</a><input id="ed-q" class="inp" type="search" placeholder="Buscar item para editar" value="' + esc(S.edq || '') + '" style="flex:1;min-width:0"></div>';
+    var L = evs().slice().sort(function (a, b) { return (a.data || '9999') < (b.data || '9999') ? -1 : 1; });
+    var q = (S.edq || '').toLowerCase();
+    if (q) L = L.filter(function (e) { return (e.disc + ' ' + e.titulo + ' ' + (e.detalhes || '')).toLowerCase().indexOf(q) >= 0; });
+    var semData = L.filter(function (e) { return !e.data || e.status === 'a-definir' || e.status === 'a-confirmar'; });
+    function rowE(e) { return '<a class="mat ed-row" href="#/agenda/editar/' + esc(e.id) + '"><span class="mat-t">' + esc(e.disc) + '</span><span class="mat-n">' + esc(e.titulo) + '<small class="mt">' + (e.data ? dmy(e.data) + (e.fim ? ' a ' + dmy(e.fim) : '') : 'sem data') + ' · ' + esc(STATUS[e.status] || e.status) + (e.pontos ? ' · ' + esc(e.pontos) : '') + '</small></span><span class="mat-go">Editar ›</span></a>'; }
+    if (semData.length && !q) h += '<section class="unit"><h3>Sem data ou a confirmar</h3><div class="card mats">' + semData.map(rowE).join('') + '</div></section>';
+    h += '<section class="unit"><h3>Todos os itens</h3><div class="card mats">' + L.map(rowE).join('') + '</div></section>';
+    return h + '<p class="muted" style="font-size:13px"><button class="linkbtn" data-ed="sair">Remover a chave deste aparelho</button></p></div>';
+  }
+  function edForm(e) {
+    var n = !e; e = e || { disc: ORDER[0], tipo: 'atividade', status: 'confirmada', secao: 'atividades', arquivos: [] };
+    var h = '<form class="card ed-form" id="ed-form" data-id="' + esc(e.id || '') + '"><h3>' + (n ? 'Novo item' : 'Editar: ' + esc(e.titulo)) + '</h3><div class="ed-grid">' +
+      '<label>Disciplina<select name="disc">' + opt(ORDER.map(function (s) { return [s, s + ' · ' + (discInfo(s).nome || '')]; }), e.disc) + '</select></label>' +
+      '<label>Categoria na agenda<select name="secao">' + opt(SECOES, e.secao) + '</select></label>' +
+      '<label class="full">Título<input class="inp" name="titulo" required value="' + esc(e.titulo || '') + '" placeholder="Ex.: Entrega do Estudo Dirigido 3"></label>' +
+      '<label>Data<input class="inp" type="date" name="data" value="' + esc(e.data || '') + '"></label>' +
+      '<label>Até (se for um período)<input class="inp" type="date" name="fim" value="' + esc(e.fim || '') + '"></label>' +
+      '<label>Situação<select name="status">' + opt([['confirmada', 'Confirmada'], ['prevista', 'Prevista'], ['a-confirmar', 'A confirmar'], ['a-definir', 'A definir (sem data)']], e.status) + '</select></label>' +
+      '<label>Tipo<select name="tipo">' + opt(TIPOS, e.tipo) + '</select></label>' +
+      '<label>Valor<input class="inp" name="pontos" value="' + esc(e.pontos || '') + '" placeholder="Ex.: 10 pts"></label>' +
+      '<label>Grupo / observação curta<input class="inp" name="grupo" value="' + esc(e.grupo || '') + '" placeholder="Opcional"></label>' +
+      '<label class="full">Resumo (aparece na lista)<input class="inp" name="detalhes" value="' + esc(e.detalhes || '') + '" placeholder="Ex.: Entregar manuscrito no início da aula."></label>' +
+      '<label class="full">Orientações completas <small>(pode usar **negrito** e listas com -)</small><textarea class="inp" name="descricao_md" rows="7">' + esc(e.descricao_md || '') + '</textarea></label>' +
+      '<label class="full">Link da tarefa no Canvas<input class="inp" name="canvas" value="' + esc(e.canvas || '') + '" placeholder="Opcional"></label>' +
+      '</div><div class="bar"><button class="btn primary" type="submit">' + (n ? 'Criar item' : 'Salvar alterações') + '</button><a class="btn" href="#/agenda/editar">Cancelar</a>' + (n ? '' : '<span style="flex:1"></span><button class="btn bad" type="button" data-ed="del">Excluir item</button>') + '</div><p class="muted ed-msg" id="ed-msg"></p></form>';
+    return h;
+  }
+  function edSubmit(form) {
+    var f = new FormData(form), id = form.dataset.id, old = id ? evs().filter(function (e) { return e.id === id; })[0] : null;
+    var ev = old ? JSON.parse(JSON.stringify(old)) : {}; if (!old) EDF.forEach(function (k) { ev[k] = k === 'arquivos' ? [] : null; });
+    ['disc', 'secao', 'titulo', 'status', 'tipo', 'pontos', 'grupo', 'detalhes', 'descricao_md', 'canvas', 'data', 'fim'].forEach(function (k) { var v = (f.get(k) || '').trim(); ev[k] = v === '' ? null : v; });
+    if (!ev.titulo) return;
+    if (ev.data && ev.status === 'a-definir') ev.status = 'confirmada';
+    if (!ev.data) { ev.fim = null; if (ev.status === 'confirmada') ev.status = 'a-definir'; }
+    if (ev.fim && ev.data && ev.fim < ev.data) { document.getElementById('ed-msg').textContent = 'A data final não pode ser antes da inicial.'; return; }
+    if (!ev.id) ev.id = ev.disc.toLowerCase() + '-' + slug(ev.titulo) + '-' + Date.now().toString(36).slice(-4);
+    edSend({ op: 'set', ev: ev, ts: Date.now() }, (old ? 'Agenda (site): edita ' : 'Agenda (site): novo item ') + ev.disc + ' · ' + ev.titulo);
+  }
+  function edSend(o, msg) {
+    var m = document.getElementById('ed-msg'); if (m) m.textContent = 'Salvando…';
+    document.querySelectorAll('#ed-form button').forEach(function (b) { b.disabled = true; });
+    ghSave(o, msg).then(function () {
+      var P = pendList(); P.push(o); LSset('pend', P); applyOp(S.agenda.eventos, o);
+      toast('Salvo! A turma vê a mudança em cerca de 2 minutos.'); location.hash = '#/agenda/editar';
+    }, function (err) {
+      document.querySelectorAll('#ed-form button').forEach(function (b) { b.disabled = false; });
+      var t = err.status === 401 ? 'A chave de edição não foi aceita (expirou ou foi digitada errada). Remova a chave e cole uma nova.' : err.status === 404 || err.status === 403 ? 'A chave não tem permissão no repositório agenda-dados (confira "Contents: Read and write").' : err.status === 409 ? 'A agenda mudou enquanto você editava. Tente salvar de novo.' : 'Não foi possível salvar: ' + err.message;
+      if (m) m.textContent = t;
+    });
+  }
+
   /* ---------- calendário PUC Minas ---------- */
   var PCT = { feriado: 'Feriado / sem aula', recesso: 'Recesso dos professores', letivo: 'Início e fim de semestre, prazos', evento: 'Evento da PUC' };
   function pcList() { return (S.pc && S.pc.eventos) || []; }
@@ -289,7 +392,7 @@
     }).join('') + '</nav>';
   }
   function agendaNav(sub) {
-    return '<nav class="subnav" aria-label="Agenda">' + [['', 'Visão geral'], ['calendario', 'Calendário'], ['atividades', 'Atividades'], ['disciplinas', 'Por disciplina'], ['encerradas', 'Encerradas'], ['avisos', 'Avisos']].map(function (x) {
+    return '<nav class="subnav" aria-label="Agenda">' + [['', 'Visão geral'], ['calendario', 'Calendário'], ['atividades', 'Atividades'], ['disciplinas', 'Por disciplina'], ['encerradas', 'Encerradas'], ['avisos', 'Avisos'], ['editar', '✎ Editar']].map(function (x) {
       return '<a href="#/agenda' + (x[0] ? '/' + x[0] : '') + '"' + ((sub || '') === x[0] ? ' aria-current="page"' : '') + '>' + x[1] + '</a>';
     }).join('') + '</nav>';
   }
@@ -611,6 +714,7 @@
         var A = it.arq && arqInfo(it.arq);
         if (A) { h += arqRow(A, A.origem === 'whatsapp' ? 'enviado no grupo' : ''); return; }
         if (it.tipo === 'P' && m.arq) return;
+        if (it.tipo === 'B') { h += '<div class="mat mat-local mat-book"><span class="pp pp-livro">Livro</span><span class="mat-n"><b>' + esc(it.titulo) + '</b><small class="au">' + esc(it.info || '') + '</small><small class="mt">Livro protegido por direito autoral: não fica para download aqui. Procure na Biblioteca da PUC ou na Minha Biblioteca.</small></span><span></span></div>'; return; }
         if (needHdr) { h += '<div class="mat-h">No Canvas (vídeos, links e atividades)</div>'; needHdr = false; }
         h += '<a class="mat" target="_blank" rel="noopener" href="' + esc(base + it.url) + '"><span class="mat-t mat-' + it.tipo + '">' + esc(e || TIPO[it.tipo] || 'Item') + '</span><span class="mat-n">' + esc(title) + '</span><span class="mat-go" aria-hidden="true">↗</span></a>';
       });
@@ -852,7 +956,7 @@
     document.querySelectorAll('#nav a').forEach(function (a) { if (a.dataset.r === r[0]) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     if (r[0] === 'agenda') {
       var sub = r[1] || '';
-      h = sub === 'calendario' ? vCal() : sub === 'atividades' ? vAtiv() : sub === 'disciplinas' ? vDisc() : sub === 'encerradas' ? vPast() : sub === 'avisos' ? vAvisos() : vHome();
+      h = sub === 'editar' ? vEditor(r[2]) : sub === 'calendario' ? vCal() : sub === 'atividades' ? vAtiv() : sub === 'disciplinas' ? vDisc() : sub === 'encerradas' ? vPast() : sub === 'avisos' ? vAvisos() : vHome();
       h = h.replace('<div class="page">', '<div class="page">' + agendaNav(sub));
     }
     else if (r[0] === 'anotacoes' && isSig(r[1])) h = vNotebook(r[1].toUpperCase(), r[2], r[3]);
@@ -878,6 +982,13 @@
   window.addEventListener('hashchange', function () { render(); window.scrollTo(0, 0); });
 
   document.addEventListener('click', function (ev) {
+    var ed = ev.target.closest('[data-ed]');
+    if (ed) {
+      var k = ed.dataset.ed;
+      if (k === 'tok') { var v = (document.getElementById('gh-tok').value || '').trim(); if (!/^(github_pat_|ghp_)/.test(v)) { toast('Essa chave não parece um token do GitHub.'); return; } try { localStorage.setItem('aj:gh', v); } catch (x) { } fetch('https://api.github.com/repos/' + GH.repo, { headers: { 'Authorization': 'Bearer ' + v } }).then(function (r) { toast(r.ok ? 'Chave salva. Edição ativada!' : 'Chave salva, mas o GitHub não a aceitou. Confira as permissões.'); render(); }); return; }
+      if (k === 'sair') { try { localStorage.removeItem('aj:gh'); } catch (x) { } toast('Chave removida deste aparelho.'); render(); return; }
+      if (k === 'del') { if (ed.dataset.sure) { var fid = document.getElementById('ed-form').dataset.id; var old = evs().filter(function (e) { return e.id === fid; })[0]; edSend({ op: 'del', id: fid, ts: Date.now() }, 'Agenda (site): exclui ' + (old ? old.disc + ' · ' + old.titulo : fid)); } else { ed.dataset.sure = '1'; ed.textContent = 'Clique de novo para confirmar a exclusão'; } return; }
+    }
     var bd = ev.target.closest('[data-bd]'); if (bd) { BQ.d = bd.dataset.bd; render(); return; }
     var t = ev.target.closest('[data-arq],[data-sem],[data-pdf],[data-act],[data-cal],[data-day],[data-go],[data-tema],[data-fc]'); if (!t) return;
     var r = route(), sig = (r[1] || '').toUpperCase();
@@ -917,9 +1028,11 @@
   document.addEventListener('input', function (ev) {
     var id = ev.target.id;
     if (id === 'f-q') { clearTimeout(qt); qt = setTimeout(function () { F.q = ev.target.value; render(); }, 150); }
+    if (id === 'ed-q') { clearTimeout(qt); qt = setTimeout(function () { S.edq = ev.target.value; render(); var i = document.getElementById('ed-q'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); }
     if (id === 'bq') { clearTimeout(qt); qt = setTimeout(function () { BQ.q = ev.target.value; var b = document.getElementById('blist'); if (b) b.innerHTML = bibList(arqList().filter(function (a) { return ORDER.indexOf(a.disc) >= 0; })); }, 150); }
     if (id === 'nq') { clearTimeout(qt); qt = setTimeout(function () { S.q = ev.target.value; searchNotes(S.q); }, 200); }
   });
+  document.addEventListener('submit', function (ev) { if (ev.target.id === 'ed-form') { ev.preventDefault(); edSubmit(ev.target); } });
   document.addEventListener('change', function (ev) {
     var t = ev.target, id = t.id;
     if (t.dataset.done) { var d = LSget('done', {}); if (t.checked) d[t.dataset.done] = 1; else delete d[t.dataset.done]; LSset('done', d);
