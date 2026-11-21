@@ -165,7 +165,7 @@
       .then(function (pt) { return JSON.parse(new TextDecoder().decode(pt)); });
   }
   function usar(bundle) {
-    S.agenda = bundle.agenda; applyPending(); loadEdicoes(); S.disc = (bundle.disciplinas && bundle.disciplinas.disciplinas) || [];
+    S.agenda = bundle.agenda; applyPending(); loadEdicoes(); fetchUps(); S.disc = (bundle.disciplinas && bundle.disciplinas.disciplinas) || [];
     S.allDisc = S.disc; S.sems = (bundle.disciplinas && bundle.disciplinas.semestres) || null;
     var cur = semList().filter(function (x) { return x.status === 'atual'; })[0];
     setSem(LSget('sem', cur ? cur.id : 1));
@@ -565,7 +565,10 @@
     var R = x.resumo && resList().filter(function (r) { return r.id === x.resumo; })[0];
     var A = x.arq && arqInfo(x.arq);
     var h = '<div class="mat mat-local mat-book book"><span class="pp pp-livro">' + (x.disc ? esc(x.disc) : 'Livro') + '</span><span class="mat-n"><b>' + esc(x.titulo) + '</b>' + (x.autor ? '<small class="au">' + esc(x.autor) + '</small>' : '') + (x.obs ? '<small class="mt">' + esc(x.obs) + '</small>' : '');
-    h += '<span class="book-aviso"><b>Por que o livro não está aqui?</b> O PDF que circulou nos grupos é, muito provavelmente, uma cópia pirata de uma obra protegida por direito autoral, então ele não é hospedado na plataforma.</span>';
+    var bk = bookKey(x.titulo), U = (S.ups || []).filter(function (m) { return m.b === bk; });
+    var dsc = x.disc || (route()[0] === 'materiais' ? (route()[1] || '').toUpperCase() : '');
+    if (U.length) h += '<span class="book-ok"><b>Livro adicionado à plataforma.</b> ' + U.map(function (m) { return '<button class="btn sm primary" data-up="' + esc(m.file) + '">Baixar: ' + esc(m.t) + '</button>'; }).join(' ') + '</span>';
+    else h += '<span class="book-aviso"><b>Por que o livro não está aqui?</b> O PDF que circulou nos grupos é, muito provavelmente, uma cópia pirata de uma obra protegida por direito autoral, então ele não é hospedado na plataforma.<br><a class="btn sm" href="#/meus-arquivos/' + bk + '/' + esc(dsc || '-') + '/' + encodeURIComponent(x.titulo) + '">Adicionar o livro à plataforma</a></span>';
     h += '<span class="book-onde"><b>Onde acessar:</b> ' + esc(x.onde || 'Biblioteca da PUC Minas, Minha Biblioteca ou livrarias.') + (x.canvas ? ' <a href="' + esc(x.canvas) + '" target="_blank" rel="noopener">Abrir no Canvas ↗</a>' : '') + '</span>';
     if (R || A) h += '<span class="book-res"><b>Apesar disso, aqui vem um resumo do livro:</b><br>' + (R ? '<a class="btn sm primary" href="#/resumos/' + esc(R.id) + '">Ler o resumo</a> ' : '') + (A ? '<button class="btn sm" data-arq="' + esc(A.id) + '">Baixar resumo (PDF)</button>' : '') + '</span>';
     return h + '</span><span></span></div>';
@@ -579,12 +582,25 @@
   function unb64u(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return b64(s); }
   function upName(meta) { return sealOp(meta).then(function (b) { return 'f-' + b64u(b64(b)) + '.bin'; }); }
   function upMeta(fname) { return openOp(toB64(unb64u(fname.replace(/^f-/, '').replace(/\.bin$/, '')))); }
-  function vMeus() {
-    var opts = ORDER.map(function (s) { return '<option value="' + s + '">' + esc(s) + ' · ' + esc(discInfo(s).nome || s) + '</option>'; }).join('') + '<option value="">Geral</option>';
+  function bookKey(t) { var h = 5381; t = String(t || '').toLowerCase(); for (var i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0; return h.toString(36); }
+  function fetchUps() {
+    if (!S.key) return Promise.resolve([]);
+    return fetch(UPDIR + 'index.txt', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
+      var N = t.split('\n').map(function (x) { return x.trim(); }).filter(function (x) { return /^f-.+\.bin$/.test(x); });
+      return Promise.all(N.map(function (n) { return upMeta(n).then(function (m) { m.file = n; return m; }).catch(function () { return null; }); }));
+    }).then(function (L) {
+      var had = S.ups; S.ups = (L || []).filter(Boolean).sort(function (a, b) { return (b.em || '').localeCompare(a.em || ''); });
+      if ((had ? had.length : 0) !== S.ups.length && /^#\/(materiais|biblioteca)/.test(location.hash)) render();
+      return S.ups;
+    }).catch(function () { S.ups = S.ups || []; return S.ups; });
+  }
+  function vMeus(bk, bd, bt) {
+    bt = bt ? decodeURIComponent(bt) : ''; bd = (bd || '').toUpperCase();
+    var opts = ORDER.map(function (s) { return '<option value="' + s + '"' + (s === bd ? ' selected' : '') + '>' + esc(s) + ' · ' + esc(discInfo(s).nome || s) + '</option>'; }).join('') + '<option value="">Geral</option>';
     var h = '<div class="page"><div class="head"><span class="eyebrow">Biblioteca da turma</span><h1>Meus arquivos</h1><hr class="rule"><p class="lead">Espaço para você mesma adicionar arquivos à plataforma (PDF, Word, imagens…). O arquivo é embaralhado com a senha da turma aqui no seu aparelho, antes de ir para o GitHub: só quem tem o acesso da turma consegue abrir.</p></div>';
-    h += '<section class="unit"><h3>Adicionar arquivo</h3><div class="card" style="padding:16px">';
+    h += '<section class="unit"><h3>' + (bk ? 'Adicionar o livro à plataforma' : 'Adicionar arquivo') + '</h3><div class="card" style="padding:16px">' + (bk ? '<p style="margin-top:0">Livro: <b>' + esc(bt) + '</b>. Depois de enviado, ele aparece no cartão do livro em Materiais e na Biblioteca, com o botão para baixar.</p><input type="hidden" id="up-b" value="' + esc(bk) + '">' : '');
     h += '<label class="fl">Arquivo (até 25 MB)<input id="up-f" type="file" class="inp"></label>';
-    h += '<label class="fl">Título<input id="up-t" class="inp" placeholder="Ex.: Leviatã (livro completo)"></label>';
+    h += '<label class="fl">Título<input id="up-t" class="inp" placeholder="Ex.: Leviatã (livro completo)" value="' + esc(bt ? bt + ' (livro completo)' : '') + '"></label>';
     h += '<label class="fl">Disciplina<select id="up-d" class="inp">' + opts + '</select></label>';
     h += '<button class="btn primary" id="up-go" type="button">1. Preparar arquivo</button><div id="up-st" style="margin-top:12px"></div></div></section>';
     h += '<section class="unit"><h3>Arquivos adicionados</h3><div id="uplist" class="card empty">Carregando…</div><p class="muted" style="font-size:13px">Para apagar um arquivo, abra a pasta no GitHub, clique nele e use o ícone de lixeira.</p></section>';
@@ -594,11 +610,7 @@
   S.ups = null;
   function loadUploads(force) {
     var box = document.getElementById('uplist'); if (!box || !S.key) return;
-    fetch(UPDIR + 'index.txt', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
-      var N = t.split('\n').map(function (x) { return x.trim(); }).filter(function (x) { return /^f-.+\.bin$/.test(x); });
-      return Promise.all(N.map(function (n) { return upMeta(n).then(function (m) { m.file = n; return m; }).catch(function () { return null; }); }));
-    }).then(function (L) {
-      L = (L || []).filter(Boolean).sort(function (a, b) { return (b.em || '').localeCompare(a.em || ''); }); S.ups = L;
+    fetchUps().then(function (L) {
       if (!L.length) { box.innerHTML = 'Nenhum arquivo adicionado ainda.'; return; }
       box.className = 'card mats';
       box.innerHTML = L.map(function (m) {
@@ -613,7 +625,7 @@
     t = (t || f.name.replace(/\.[^.]+$/, '')).slice(0, 70);
     st.textContent = 'Embaralhando o arquivo…';
     var ex = (f.name.match(/\.([a-z0-9]{1,5})$/i) || [, ''])[1].toLowerCase();
-    var meta = { t: t, d: d, x: ex, s: f.size, em: new Date().toISOString().slice(0, 10) };
+    var bEl = document.getElementById('up-b'); var meta = { t: t, d: d, x: ex, s: f.size, em: new Date().toISOString().slice(0, 10) }; if (bEl && bEl.value) meta.b = bEl.value;
     var iv = crypto.getRandomValues(new Uint8Array(12));
     Promise.all([f.arrayBuffer().then(function (buf) { return crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, S.key, buf); }), upName(meta)]).then(function (R) {
       var ct = R[0], name = R[1];
@@ -1043,7 +1055,7 @@
     else if (r[0] === 'pdf') h = vPDF();
     else if (r[0] === 'puc') h = vPuc();
     else if (r[0] === 'biblioteca') h = vBiblioteca();
-    else if (r[0] === 'meus-arquivos') h = vMeus();
+    else if (r[0] === 'meus-arquivos') h = vMeus(r[1], r[2], r[3]);
     else if (r[0] === 'arquivo' && r[1]) h = vArquivo(r[1]);
     else h = vInicio();
     var focusId = document.activeElement && document.activeElement.id, pos = focusId && document.activeElement.selectionStart;
@@ -1055,7 +1067,7 @@
     var title = { arquivo: 'Arquivo da turma', agenda: 'Agenda', anotacoes: 'Anotações', materiais: 'Materiais do Canvas', resumos: 'Resumos para provas', pdf: 'Baixar em PDF', puc: 'Calendário PUC Minas', biblioteca: 'Biblioteca', 'meus-arquivos': 'Meus arquivos' }[r[0]];
     document.title = (title ? title + ' · ' : '') + 'Direito · Turma PUC Minas';
   }
-  window.addEventListener('hashchange', function () { render(); window.scrollTo(0, 0); });
+  window.addEventListener('hashchange', function () { render(); window.scrollTo(0, 0); if (/^#\/(materiais|biblioteca)/.test(location.hash)) fetchUps(); });
 
   document.addEventListener('click', function (ev) {
     var ed = ev.target.closest('[data-ed]');
