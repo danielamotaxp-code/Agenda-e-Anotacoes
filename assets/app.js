@@ -405,7 +405,7 @@
   }
   function vMatDisc(sig) {
     var d = discInfo(sig), M = S.mat && S.mat.disciplinas && S.mat.disciplinas[sig];
-    return '<div class="page" style="--c:' + cvar(sig) + '"><div class="head dhead"><span class="eyebrow"><a href="#/materiais">Materiais do Canvas</a> · ' + esc(sig) + (d.professor ? ' · ' + esc(d.professor) : '') + '</span><h1>' + esc(d.nome || sig) + '</h1></div>' + arqHTML(sig) + matHTML(M) +
+    return '<div class="page" style="--c:' + cvar(sig) + '"><div class="head dhead"><span class="eyebrow"><a href="#/materiais">Materiais do Canvas</a> · ' + esc(sig) + (d.professor ? ' · ' + esc(d.professor) : '') + '</span><h1>' + esc(d.nome || sig) + '</h1></div>' + upsHTML(sig) + arqHTML(sig) + matHTML(M) +
       '<p class="muted" style="font-size:14px">Mesma disciplina em outros espaços: <a href="#/anotacoes/' + sig.toLowerCase() + '">Anotações</a> · <a href="#/agenda/disciplinas#' + sig + '">Datas na agenda</a></p></div>';
   }
 
@@ -594,10 +594,16 @@
       return S.ups;
     }).catch(function () { S.ups = S.ups || []; return S.ups; });
   }
+  function upsHTML(sig) {
+    var L = (S.ups || []).filter(function (m) { return m.d === sig && !m.b; });
+    var h = '<section class="unit"><h3>Adicionados por você <small class="muted">· ' + L.length + '</small></h3>';
+    if (L.length) h += '<div class="card mats">' + L.map(function (m) { return '<div class="mat mat-local"><span class="pp">' + esc((m.x || 'arq').toUpperCase()) + '</span><span class="mat-n"><b>' + esc(m.t) + '</b><small class="mt">' + (m.s ? (m.s / 1048576).toFixed(1) + ' MB' : '') + (m.em ? ' · adicionado em ' + dmy(m.em) : '') + '</small></span><span class="mat-act"><button class="btn sm primary" data-up="' + esc(m.file) + '">Baixar</button></span></div>'; }).join('') + '</div>';
+    return h + '<p style="margin-top:8px"><a class="btn sm" href="#/meus-arquivos/-/' + sig + '">+ Adicionar arquivo a ' + esc(discInfo(sig).nome || sig) + '</a></p></section>';
+  }
   function vMeus(bk, bd, bt) {
-    bt = bt ? decodeURIComponent(bt) : ''; bd = (bd || '').toUpperCase();
+    if (bk === '-') bk = ''; bt = bt ? decodeURIComponent(bt) : ''; bd = (bd || '').toUpperCase();
     var opts = ORDER.map(function (s) { return '<option value="' + s + '"' + (s === bd ? ' selected' : '') + '>' + esc(s) + ' · ' + esc(discInfo(s).nome || s) + '</option>'; }).join('') + '<option value="">Geral</option>';
-    var h = '<div class="page"><div class="head"><span class="eyebrow">Biblioteca da turma</span><h1>Meus arquivos</h1><hr class="rule"><p class="lead">Espaço para você mesma adicionar arquivos à plataforma (PDF, Word, imagens…). O arquivo é embaralhado com a senha da turma aqui no seu aparelho, antes de ir para o GitHub: só quem tem o acesso da turma consegue abrir.</p></div>';
+    var h = '<div class="page"><div class="head"><span class="eyebrow">Biblioteca da turma</span><h1>Meus arquivos</h1><hr class="rule"><p class="lead">Espaço para você mesma adicionar arquivos à plataforma (PDF, Word, imagens…). O arquivo vai para <b>Materiais</b> da disciplina escolhida (ou fica só aqui, se for "Geral"). O arquivo é embaralhado com a senha da turma aqui no seu aparelho, antes de ir para o GitHub: só quem tem o acesso da turma consegue abrir.</p></div>';
     h += '<section class="unit"><h3>' + (bk ? 'Adicionar o livro à plataforma' : 'Adicionar arquivo') + '</h3><div class="card" style="padding:16px">' + (bk ? '<p style="margin-top:0">Livro: <b>' + esc(bt) + '</b>. Depois de enviado, ele aparece no cartão do livro em Materiais e na Biblioteca, com o botão para baixar.</p><input type="hidden" id="up-b" value="' + esc(bk) + '">' : '');
     h += '<label class="fl">Arquivo (até 25 MB)<input id="up-f" type="file" class="inp"></label>';
     h += '<label class="fl">Título<input id="up-t" class="inp" placeholder="Ex.: Leviatã (livro completo)" value="' + esc(bt ? bt + ' (livro completo)' : '') + '"></label>';
