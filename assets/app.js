@@ -562,7 +562,7 @@
   }
   /* ---------- livro protegido: aviso + onde achar + resumo ---------- */
   function bookCard(x) {
-    var R = x.resumo && resList().filter(function (r) { return r.id === x.resumo; })[0];
+    var R = x.resumo && resList(true).filter(function (r) { return r.id === x.resumo; })[0];
     var A = x.arq && arqInfo(x.arq);
     var h = '<div class="mat mat-local mat-book book"><span class="pp pp-livro">' + (x.disc ? esc(x.disc) : 'Livro') + '</span><span class="mat-n"><b>' + esc(x.titulo) + '</b>' + (x.autor ? '<small class="au">' + esc(x.autor) + '</small>' : '') + (x.obs ? '<small class="mt">' + esc(x.obs) + '</small>' : '');
     var bk = bookKey(x.titulo), U = (S.ups || []).filter(function (m) { return m.b === bk; });
@@ -838,7 +838,7 @@
   }
 
   /* ---------- resumos para provas ---------- */
-  function resList() { return ((S.res && S.res.resumos) || []).filter(function (r) { return ORDER.indexOf(r.disc) >= 0; }); }
+  function resList(all) { return ((S.res && S.res.resumos) || []).filter(function (r) { return ORDER.indexOf(r.disc) >= 0 && (all || !r.livro); }); }
   function resEv(r) { return r.evento ? evs().filter(function (e) { return e.id === r.evento; })[0] : null; }
   function resDate(r) { var e = resEv(r); return (e && e.data) || r.data || null; }
   function resSort(a, b) { var x = resDate(a) || '9999', y = resDate(b) || '9999'; return x < y ? -1 : x > y ? 1 : ORDER.indexOf(a.disc) - ORDER.indexOf(b.disc); }
@@ -863,7 +863,7 @@
     return h + (S.res && S.res.atualizadoEm ? '<p class="muted" style="font-size:13px">Resumos atualizados em ' + dmy(S.res.atualizadoEm.slice(0, 10)) + '.</p>' : '') + '</div>';
   }
   function vResumo(id) {
-    var r = resList().filter(function (x) { return x.id === id; })[0];
+    var r = resList(true).filter(function (x) { return x.id === id; })[0];
     if (!r) return '<div class="page"><div class="card empty">Resumo não encontrado. <a href="#/resumos">Voltar aos resumos</a></div></div>';
     var e = resEv(r), dt = resDate(r), sig = r.disc;
     var h = '<div class="page" style="--c:' + cvar(sig) + '"><div class="head dhead"><span class="eyebrow"><a href="#/resumos">Resumos para provas</a> · ' + esc(sig) + '</span><h1>' + esc(r.titulo) + '</h1>' +
@@ -951,7 +951,7 @@
   }
   function makePDF(kind, sig, id) {
     if (kind === 'resumo') {
-      var r = resList().filter(function (x) { return x.id === id; })[0]; if (!r) return;
+      var r = resList(true).filter(function (x) { return x.id === id; })[0]; if (!r) return;
       printDoc(r.disc + ' - ' + r.titulo, cover('Resumo para prova · ' + r.titulo, r.disc) + pResumo(r), r.disc + ' · ' + r.titulo); return;
     }
     var sigs = sig ? [sig] : ORDER.filter(function (s) { return kind === 'resumos' ? resList().some(function (r) { return r.disc === s; }) : (S.notes[s] && ((S.notes[s].anotacoes || []).length || (S.notes[s].questoes || []).length)); });
