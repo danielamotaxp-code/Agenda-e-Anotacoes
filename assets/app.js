@@ -345,7 +345,7 @@
     var tI = iso(today()), byM = {};
     pcList().forEach(function (e) { var m = +e.data.slice(5, 7) - 1; (byM[m] = byM[m] || []).push(e); });
     var h = '<div class="page"><div class="head"><span class="eyebrow">PUC Minas · ' + S.pc.ano + '</span><h1>Calendário acadêmico</h1><hr class="rule"><p class="lead">' + esc(S.pc.obs || '') + '</p>' +
-      '<div class="bar"><a class="btn primary" href="' + esc(S.pc.fonte) + '" target="_blank" rel="noopener">Abrir o PDF oficial da PUC</a><a class="btn" href="' + esc(S.pc.pagina) + '" target="_blank" rel="noopener">Página do calendário</a></div></div>';
+      '<div class="bar">' + (arqInfo('cronograma-globais-1sem') ? '<button class="btn primary" data-arq="cronograma-globais-1sem">Cronograma de globais 1° semestre (PDF)</button>' : '') + '<a class="btn primary" href="' + esc(S.pc.fonte) + '" target="_blank" rel="noopener">Abrir o PDF oficial da PUC</a><a class="btn" href="' + esc(S.pc.pagina) + '" target="_blank" rel="noopener">Página do calendário</a></div></div>';
     h += '<div class="legend pc-legend">' + Object.keys(PCT).map(function (k) { return '<span class="pc-' + k + '"><i></i>' + PCT[k] + '</span>'; }).join('') + '</div>';
     h += '<div class="pc-grid">';
     for (var m = 0; m < 12; m++) {
