@@ -405,7 +405,7 @@
   }
   function vMatDisc(sig) {
     var d = discInfo(sig), M = S.mat && S.mat.disciplinas && S.mat.disciplinas[sig];
-    return '<div class="page" style="--c:' + cvar(sig) + '"><div class="head dhead"><span class="eyebrow"><a href="#/materiais">Materiais do Canvas</a> · ' + esc(sig) + (d.professor ? ' · ' + esc(d.professor) : '') + '</span><h1>' + esc(d.nome || sig) + '</h1></div>' + upsHTML(sig) + arqHTML(sig) + matHTML(M) +
+    return '<div class="page" style="--c:' + cvar(sig) + '"><div class="head dhead"><span class="eyebrow"><a href="#/materiais">Materiais do Canvas</a> · ' + esc(sig) + (d.professor ? ' · ' + esc(d.professor) : '') + '</span><h1>' + esc(d.nome || sig) + '</h1></div>' + livrosResHTML(sig) + upsHTML(sig) + arqHTML(sig) + matHTML(M) +
       '<p class="muted" style="font-size:14px">Mesma disciplina em outros espaços: <a href="#/anotacoes/' + sig.toLowerCase() + '">Anotações</a> · <a href="#/agenda/disciplinas#' + sig + '">Datas na agenda</a></p></div>';
   }
 
@@ -593,6 +593,14 @@
       if ((had ? had.length : 0) !== S.ups.length && /^#\/(materiais|biblioteca)/.test(location.hash)) render();
       return S.ups;
     }).catch(function () { S.ups = S.ups || []; return S.ups; });
+  }
+  function livrosResHTML(sig) {
+    var L = resList(true).filter(function (r) { return r.livro && r.disc === sig; });
+    if (!L.length) return '';
+    return '<section class="unit"><h3>Resumos dos livros <small class="muted">· ' + L.length + '</small></h3><div class="card mats">' + L.map(function (r) {
+      var P = arqList().filter(function (a) { return a.resumo === r.id; });
+      return '<div class="mat mat-local"><span class="pp pp-livro">Livro</span><span class="mat-n"><b>' + esc(r.titulo) + '</b>' + (r.abrange && r.abrange.length ? '<small class="mt">' + esc(r.abrange.join(' · ')) + '</small>' : '') + '</span><span class="mat-act"><a class="btn sm primary" href="#/resumos/' + esc(r.id) + '">Ler</a>' + P.map(function (a) { return '<button class="btn sm" data-arq="' + esc(a.id) + '">PDF' + (P.length > 1 ? ': ' + esc(a.titulo.split(' · ')[0]) : '') + '</button>'; }).join('') + '</span></div>';
+    }).join('') + '</div></section>';
   }
   function upsHTML(sig) {
     var L = (S.ups || []).filter(function (m) { return m.d === sig && !m.b; });
